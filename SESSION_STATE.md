@@ -9,11 +9,11 @@ Personal "app factory" system using Claude Code + Ralph loops to build web/mobil
 
 ---
 
-## Your Businesses (Context)
-- Soulscape Media - wellness/mindfulness content
-- Thryve Labs - health tech solutions
-- Resonance Digital - digital marketing agency
-- Retail arbitrage / ecommerce operations
+## What I Build
+- **Web apps** - Google stack architecture (Firebase, GCP)
+- **Mobile apps** - iOS/Android
+- **API integrations** - Web apps utilizing external APIs
+- **Python scripts** - Automation, data processing, backends
 
 ---
 
@@ -59,7 +59,7 @@ Removed old "spec ceremony" system:
 | `ralph-review-prompt.md` | Review prompt |
 | `ralph-verify-prompt.md` | Verify prompt |
 
-### ~/.claude/commands/ (7 commands)
+### ~/.claude/commands/ (8 commands)
 | Command | Purpose |
 |---------|---------|
 | `/add-effect` | Add motion effects (parallax, scroll, hover) |
@@ -67,17 +67,25 @@ Removed old "spec ceremony" system:
 | `/add-rule` | Capture lessons to CLAUDE.md |
 | `/clone-design` | Clone UI from screenshot |
 | `/deploy-production` | Production deployment |
+| `/fix-issue` | Fix Linear issue via Ralph loop |
 | `/new-app` | Build new app |
 | `/rams` | Accessibility/visual review |
 
-### ~/.claude/agents/ (5 agents)
+### ~/.claude/agents/ (7 agents)
 | Agent | Purpose |
 |-------|---------|
 | `build-validator` | Verify project builds |
+| `ownership-gate` | Check CODEOWNERS, branch protection before auto-fix |
+| `plan-validator` | Verify plan is grounded in repo before execution |
 | `security-reviewer` | Code security review |
 | `test-runner` | Run tests |
 | `verify-app` | Verify app runs |
 | `visual-validator` | Playwright visual checks |
+
+### ~/.claude/scripts/
+| Script | Purpose |
+|--------|---------|
+| `issue-watcher.sh` | Poll Linear for auto-fix issues (cron) |
 
 ### ~/.claude/skills/ (6 Vercel skills)
 | Skill | Purpose |
@@ -89,8 +97,26 @@ Removed old "spec ceremony" system:
 | `vercel-deploy-claimable` | Deploy to Vercel |
 | `web-design-guidelines` | UI review |
 
-### Plugins Enabled (8)
-github, frontend-design, security-guidance, ralph-wiggum, pr-review-toolkit, code-review, hookify, feature-dev
+### Plugins Enabled (11)
+
+| Plugin | Type | How It Works |
+|--------|------|--------------|
+| `github` | External | GitHub integration (repos, issues, PRs) |
+| `frontend-design` | Auto | Activates when building UI - produces distinctive, production-grade code |
+| `security-guidance` | Auto | Security analysis, vulnerability detection |
+| `pr-review-toolkit` | Command | `/review-pr` - 6 specialized review agents |
+| `code-review` | Command | `/code-review` - Automated PR review with confidence scoring |
+| `hookify` | Command | `/hookify` - Create behavior-blocking rules |
+| `feature-dev` | Command | `/feature-dev` - 7-phase structured development workflow |
+| `firebase` | External | Firebase/GCP integration |
+| `supabase` | External | Supabase backend integration |
+| `playwright` | External | Browser automation/testing |
+| `linear` | External | Linear issue tracking integration |
+
+**Plugin behavior types:**
+- **Auto** - Activates automatically based on context (no command needed)
+- **Command** - Invoked via slash command
+- **External** - Service integration (API access)
 
 ### MCP Tools Available
 - `mcp__rube__*` - Composio/Rube (500+ integrations)
@@ -99,24 +125,100 @@ github, frontend-design, security-guidance, ralph-wiggum, pr-review-toolkit, cod
 
 ---
 
-## How to Use
+## How Things Fit Together
 
-### Direct conversation
-Just tell me what to build. I read references, extract designs, write code.
+### Plan Mode + Plugins
+When Claude enters plan mode:
+1. **Commands** (`/clone-design`, `/rams`) - Explicitly referenced in plan steps
+2. **Skills** (`design-extraction`, `api-endpoint`) - Referenced when needed
+3. **Agents** (`build-validator`, `test-runner`) - Called for verification steps
+4. **Auto plugins** (`frontend-design`, `security-guidance`) - Kick in automatically during execution
+5. **Command plugins** (`/feature-dev`, `/code-review`) - Explicitly invoked when plan calls for them
 
-### Ralph loop (multi-step builds)
+### Ralph Loop (Your Custom Version)
+External to Claude - bash script that:
+1. Creates `IMPLEMENTATION_PLAN.md` (plan mode)
+2. Executes steps with fresh context each iteration (build mode)
+3. Use for multi-step builds where context pollution hurts quality
+
 ```bash
-# Plan mode - creates IMPLEMENTATION_PLAN.md
+# Plan mode
 ~/.claude/ralph-loop.sh plan "Build landing page from reference"
 
-# Build mode - executes plan
+# Build mode
 ~/.claude/ralph-loop.sh
 ```
 
-### Design from reference
+### Direct Conversation
+For simple tasks, just tell me what to build. Plugins activate automatically as needed.
+
+### Design from Reference
 1. Drop image in project (e.g., `references/homepage.png`)
 2. Tell me: "Clone design from references/homepage.png"
-3. I extract tokens, build it
+3. I extract tokens, build it (frontend-design plugin activates)
+
+---
+
+## Linear Auto-Fix Pipeline
+
+### Labels Control Behavior
+| Label | Behavior |
+|-------|----------|
+| `auto-fix` | Full automation - Ralph loop runs automatically |
+| `claude-fix` | Semi-auto - Notifies, waits for `/fix-issue` |
+| (none) | Manual - Human decides |
+
+### Pipeline Flow
+```
+Issue Created
+     ↓
+Label Check
+     ↓
+┌─────────────────────────────────┐
+│ GATE 1: OWNERSHIP               │
+│ ✓ CODEOWNERS exists             │
+│ ✓ Branch protection enabled     │
+│ ✓ Reviewer resolvable           │
+│ FAIL → Downgrade to claude-fix  │
+└─────────────────────────────────┘
+     ↓
+┌─────────────────────────────────┐
+│ GATE 2: ATTEMPT TRACKING        │
+│ Label: ralph-attempts:N         │
+│ IF N >= 2 → Escalate            │
+│ ELSE → Increment                │
+└─────────────────────────────────┘
+     ↓
+Generate IMPLEMENTATION_PLAN.md
+     ↓
+┌─────────────────────────────────┐
+│ GATE 3: PLAN VALIDATOR          │
+│ Is plan grounded in repo?       │
+│ NO → Downgrade to claude-fix    │
+│ YES → Proceed                   │
+└─────────────────────────────────┘
+     ↓
+Ralph Loop Executes
+     ↓
+Create PR + Link to Issue
+     ↓
+Move Issue → "In Review"
+     ↓
+[Human approves + CI passes]
+     ↓
+Merge → Issue Closed
+```
+
+### Setup
+1. Create Linear workspace
+2. Add labels: `auto-fix`, `claude-fix`, `ralph-attempts:1`, `ralph-attempts:2`
+3. Set up cron: `*/5 * * * * ~/.claude/scripts/issue-watcher.sh`
+4. Ensure repo has CODEOWNERS and branch protection
+
+### Manual Trigger
+```
+/fix-issue PROJ-123
+```
 
 ---
 
