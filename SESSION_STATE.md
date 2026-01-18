@@ -1,16 +1,11 @@
 # Factory Floor - Session State
 **Last Updated**: 2026-01-19
-**Status**: Architecture Finalized - Ready to Build
+**Status**: System Cleaned & Backed Up - Ready to Build
 
 ---
 
 ## Project Goal
-Build an automated "factory floor" system that:
-1. Monitors multiple data sources (Reddit, news, social, industry feeds)
-2. Detects signals/opportunities relevant to your businesses
-3. Routes actionable intel to appropriate channels
-4. Operates autonomously with minimal intervention
-5. **NEW**: Serves as a universal app factory for web/mobile builds
+Personal "app factory" system using Claude Code + Ralph loops to build web/mobile projects from plain language + reference images.
 
 ---
 
@@ -24,137 +19,130 @@ Build an automated "factory floor" system that:
 
 ## Key Decisions Made
 
-### 1. Tool Stack Confirmed
-- **Rube/Composio MCP** - 500+ app integrations (Reddit, Slack, email, sheets, etc.)
-- **Playwright MCP** - Browser automation for sites without APIs
-- **Claude in Chrome MCP** - Visual browser control when needed
-- **Claude Code** - Orchestration and intelligence layer
+### 1. Tool Stack
+- **Rube/Composio MCP** - 500+ app integrations
+- **Playwright MCP** - Browser automation
+- **Claude in Chrome MCP** - Visual browser control
+- **Claude Code** - Orchestration layer
 
-### 2. Architecture Direction
-Using **Rube recipes** for:
-- Pre-built integrations (no API key hunting)
-- Scheduling built-in
-- Recipe reusability
+### 2. Architecture
+**Use Claude Plan Mode as router — no custom orchestration.**
 
-### 3. Agent/Skill Strategy (Session 2026-01-19)
+Plan mode handles:
+- Skill discovery (reads SKILL.md, READMEs)
+- Step-level routing
+- Validation (steps don't advance until complete)
 
-**Decision: Use Claude Plan Mode as the router — no custom orchestration needed.**
+### 3. Session Continuity
+- Git-based checkpoints + this SESSION_STATE.md
+- New session: "Read SESSION_STATE.md and continue"
 
-Key insights from today's discussion:
-- SpecKit is unnecessary overhead for solo work — just talk + acceptance criteria
-- Claude Plan Mode already does implicit skill discovery (reads SKILL.md, READMEs, etc.)
-- Plan mode handles step-level routing internally ("what capability is needed now?")
-- Chaining happens naturally (read → analyze → modify → verify)
-- Validation is embedded — steps don't advance until complete
-
-**What Plan Mode solves:**
-| Concern | Solution |
-|---------|----------|
-| Skill discovery | Repo context ingestion |
-| Routing | Step-intent inference |
-| Ordering | Plan step sequencing |
-| Guardrails | Step completion checks |
-| Loop control | Human-visible plan state |
-
-**What Plan Mode doesn't solve (the 20%):**
-- Hard determinism (may take different paths)
-- Cost ceilings (can't self-limit tokens)
-- Machine-readable audit traces
-- Unattended autonomous loops
-
-**When to revisit:** Only build custom routing when loops run unattended, costs must be capped, or decisions must be auditable.
-
-### 4. Session Continuity Strategy (Session 2026-01-19)
-
-**Decision: Git-based checkpoints + SESSION_STATE.md**
-
-- This file captures decisions, context, and progress
-- Git commits mark major milestones
-- Each new session starts with: "Read SESSION_STATE.md and continue"
-- ~90% continuity; lose conversational nuance but retain all decisions
+### 4. System Cleanup (2026-01-19)
+Removed old "spec ceremony" system:
+- Deleted spec-check, spec-check-design, design-system commands
+- Deleted council-review, spec-interview commands
+- Deleted council agents (accessibility-auditor, conversion-architect, council-arbitrator, growth-analyst, seo-architect, simplicity-enforcer, ux-critic)
+- Kept only build/verification focused components
 
 ---
 
-## Skills Available (REFERENCES folder)
+## What's Installed (CURRENT STATE)
 
-Frontend/Design:
-- `design-system.md` - Design system creation
-- `clone-design.md` - Clone designs from screenshots
-- `add-effect.md` - Motion effects (parallax, scroll, hover)
-- `ux-critic.md` - UX analysis
-- `accessibility-auditor.md` - A11y audits
+### ~/.claude/ Root
+| File | Purpose |
+|------|---------|
+| `CLAUDE.md` | Global instructions (plan mode, ralph pattern) |
+| `settings.json` | Plugins, hooks (prettier), permissions |
+| `ralph-loop.sh` | Main orchestrator script |
+| `ralph-plan-prompt.md` | Plan mode instructions |
+| `ralph-build-prompt.md` | Build mode instructions |
+| `ralph-review-prompt.md` | Review prompt |
+| `ralph-verify-prompt.md` | Verify prompt |
 
-Architecture/Quality:
-- `new-app.md` - Build new apps from spec
-- `spec-check.md` / `spec-check-design.md` - Spec validation
-- `council-review.md` / `council-arbitrator.md` - Code review council
-- `security-reviewer.md` - Security audits
-- `simplicity-enforcer.md` - Prevent over-engineering
+### ~/.claude/commands/ (7 commands)
+| Command | Purpose |
+|---------|---------|
+| `/add-effect` | Add motion effects (parallax, scroll, hover) |
+| `/add-python-component` | Add Python backend |
+| `/add-rule` | Capture lessons to CLAUDE.md |
+| `/clone-design` | Clone UI from screenshot |
+| `/deploy-production` | Production deployment |
+| `/new-app` | Build new app |
+| `/rams` | Accessibility/visual review |
 
-Growth/Optimization:
-- `conversion-architect.md` - Conversion optimization
-- `growth-analyst.md` - Growth analysis
-- `seo-architect.md` - SEO optimization
+### ~/.claude/agents/ (5 agents)
+| Agent | Purpose |
+|-------|---------|
+| `build-validator` | Verify project builds |
+| `security-reviewer` | Code security review |
+| `test-runner` | Run tests |
+| `verify-app` | Verify app runs |
+| `visual-validator` | Playwright visual checks |
 
-Utilities:
-- `add-rule.md` - Add lessons to CLAUDE.md
-- `add-python-component.md` - Python backend components
-- `deploy-production.md` - Production deployment
-- `test-runner.md` - Test execution
+### ~/.claude/skills/ (6 Vercel skills)
+| Skill | Purpose |
+|-------|---------|
+| `api-endpoint` | Create API endpoints |
+| `db-migration` | Database migrations |
+| `design-extraction` | Extract design tokens from images |
+| `react-best-practices` | React/Next.js optimization |
+| `vercel-deploy-claimable` | Deploy to Vercel |
+| `web-design-guidelines` | UI review |
 
-**Pending installation:** Vercel agent-skills (react-best-practices, web-design-guidelines, vercel-deploy-claimable)
+### Plugins Enabled (8)
+github, frontend-design, security-guidance, ralph-wiggum, pr-review-toolkit, code-review, hookify, feature-dev
 
----
-
-## Tools Available in This Environment
-
-### Already Connected (via MCP)
-- `mcp__rube__*` - Composio/Rube tools (search, execute, recipes, scheduling)
+### MCP Tools Available
+- `mcp__rube__*` - Composio/Rube (500+ integrations)
 - `mcp__playwright__*` - Browser automation
-- `mcp__Claude_in_Chrome__*` - Chrome browser control
-
-### Need to Connect (when building)
-- Reddit (via Rube)
-- Slack (via Rube)
-- Gmail (via Rube)
-- Google Sheets (via Rube)
-- Others as needed
+- `mcp__Claude_in_Chrome__*` - Chrome control
 
 ---
 
-## Next Steps
+## How to Use
 
-1. [ ] Install Vercel agent-skills (`npx add-skill vercel-labs/agent-skills`)
-2. [ ] Choose first app/feature to build with Factory Floor
-3. [ ] Create IMPLEMENTATION_PLAN.md for that build
-4. [ ] Execute via Ralph loop or plan mode
+### Direct conversation
+Just tell me what to build. I read references, extract designs, write code.
+
+### Ralph loop (multi-step builds)
+```bash
+# Plan mode - creates IMPLEMENTATION_PLAN.md
+~/.claude/ralph-loop.sh plan "Build landing page from reference"
+
+# Build mode - executes plan
+~/.claude/ralph-loop.sh
+```
+
+### Design from reference
+1. Drop image in project (e.g., `references/homepage.png`)
+2. Tell me: "Clone design from references/homepage.png"
+3. I extract tokens, build it
 
 ---
 
-## Open Questions
+## File Locations
 
-1. What's the first thing to build? (monitoring system vs. a specific app)
-2. Do you want Vercel skills installed now?
+**Project:**
+- `/Users/kitfieldgrass/Documents/____CLAUDE_PROJECTS/_FACTORY_FLOOR/FACTORY_FLOOR/`
+
+**System backup (in this repo):**
+- `system-backup/commands/` - All slash commands
+- `system-backup/agents/` - All agents
+- `system-backup/skills/` - All Vercel skills
+- `system-backup/ralph/` - Ralph loop files
+- `system-backup/settings.json` - Claude settings
+- `system-backup/CLAUDE.md` - Global instructions
+
+**Live installation:**
+- `~/.claude/` - Active system files
 
 ---
 
 ## How to Resume
 
-When starting a new session, say:
-
 ```
 Read SESSION_STATE.md and continue the Factory Floor project.
 ```
-
-That's it. I'll pick up from current state.
-
----
-
-## File Locations
-- Project root: `/Users/kitfieldgrass/Documents/____CLAUDE_PROJECTS/_FACTORY_FLOOR/FACTORY_FLOOR/`
-- Session state: `SESSION_STATE.md` (this file)
-- Implementation plan: `IMPLEMENTATION_PLAN.md`
-- Skills/references: `REFERENCES/`
 
 ---
 
@@ -162,4 +150,6 @@ That's it. I'll pick up from current state.
 
 | Commit | Date | Milestone |
 |--------|------|-----------|
-| (initial) | 2026-01-19 | Project init + architecture decisions |
+| c8825bc | 2026-01-19 | Remove reference templates |
+| 217f097 | 2026-01-19 | Initial commit |
+| (next) | 2026-01-19 | System cleanup + full backup |
