@@ -1,5 +1,5 @@
 # Factory Floor - Per-Project Module
-# Creates Cloud Run service with Load Balancer + Cloud Armor
+# Creates Cloud Run service + backend on shared Load Balancer
 #
 # Usage:
 #   module "my_app" {
@@ -9,6 +9,7 @@
 #     cloud_armor_policy_name         = data.terraform_remote_state.global.outputs.cloud_armor_policy_name
 #     cloud_run_service_account_email = data.terraform_remote_state.global.outputs.cloud_run_service_account_email
 #     vpc_connector_id                = data.terraform_remote_state.global.outputs.vpc_connector_id
+#     url_map_name                    = data.terraform_remote_state.global.outputs.url_map_name
 #   }
 
 terraform {
@@ -31,7 +32,7 @@ locals {
 resource "google_cloud_run_v2_service" "app" {
   name     = local.service_name
   location = var.gcp_region
-  ingress  = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER" # Only via LB
+  ingress  = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER" # Only via shared LB
 
   template {
     service_account = var.cloud_run_service_account_email
@@ -112,10 +113,9 @@ resource "google_compute_region_network_endpoint_group" "app" {
 }
 
 # ============================================
-# HTTPS LOAD BALANCER
+# BACKEND SERVICE (added to shared LB)
 # ============================================
 
-# Backend service
 resource "google_compute_backend_service" "app" {
   name        = "${local.service_name}-backend"
   protocol    = "HTTP"
@@ -126,62 +126,13 @@ resource "google_compute_backend_service" "app" {
     group = google_compute_region_network_endpoint_group.app.id
   }
 
-  # Attach Cloud Armor
-  security_policy = "projects/${var.gcp_project_id}/global/securityPolicies/${var.cloud_armor_policy_name}"
+  # Cloud Armor is attached to the shared LB's default backend
+  # Individual app backends inherit protection via the URL map
 
   log_config {
     enable      = true
     sample_rate = 1.0
   }
-}
-
-# URL map
-resource "google_compute_url_map" "app" {
-  name            = "${local.service_name}-urlmap"
-  default_service = google_compute_backend_service.app.id
-}
-
-# Managed SSL certificate (uses *.run.app domain)
-# For custom domains, add google_compute_managed_ssl_certificate
-
-# HTTPS proxy
-resource "google_compute_target_https_proxy" "app" {
-  name             = "${local.service_name}-https-proxy"
-  url_map          = google_compute_url_map.app.id
-  ssl_certificates = [] # Uses default Google-managed cert for run.app
-}
-
-# Global forwarding rule (the actual load balancer)
-resource "google_compute_global_forwarding_rule" "app" {
-  name                  = "${local.service_name}-lb"
-  ip_protocol           = "TCP"
-  load_balancing_scheme = "EXTERNAL_MANAGED"
-  port_range            = "443"
-  target                = google_compute_target_https_proxy.app.id
-}
-
-# HTTP to HTTPS redirect
-resource "google_compute_url_map" "http_redirect" {
-  name = "${local.service_name}-http-redirect"
-
-  default_url_redirect {
-    https_redirect         = true
-    redirect_response_code = "MOVED_PERMANENTLY_DEFAULT"
-    strip_query            = false
-  }
-}
-
-resource "google_compute_target_http_proxy" "http_redirect" {
-  name    = "${local.service_name}-http-proxy"
-  url_map = google_compute_url_map.http_redirect.id
-}
-
-resource "google_compute_global_forwarding_rule" "http_redirect" {
-  name                  = "${local.service_name}-http-lb"
-  ip_protocol           = "TCP"
-  load_balancing_scheme = "EXTERNAL_MANAGED"
-  port_range            = "80"
-  target                = google_compute_target_http_proxy.http_redirect.id
 }
 
 # ============================================

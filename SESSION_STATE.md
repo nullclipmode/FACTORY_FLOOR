@@ -298,6 +298,13 @@ Read SESSION_STATE.md and continue the Factory Floor project.
 
 ## Infrastructure Setup (One-Time)
 
+**Mental model:**
+- One GCP project (e.g., `factory-floor-prod`)
+- One HTTPS Load Balancer (shared, with Cloud Armor attached)
+- Many apps as separate Cloud Run services (backends on the shared LB)
+- Global infra = once (LB + Cloud Armor + IAM + VPC)
+- `/new-app` = per app (adds Cloud Run service + backend to shared LB)
+
 ### Prerequisites
 ```bash
 brew install google-cloud-sdk
@@ -320,6 +327,8 @@ terraform apply
 echo -n "your-sentry-dsn" | gcloud secrets versions add sentry-dsn --data-file=-
 echo -n "your-mixpanel-token" | gcloud secrets versions add mixpanel-token --data-file=-
 ```
+
+After this, `/new-app my-app` provisions a new Cloud Run service inside the same GCP project.
 
 ---
 

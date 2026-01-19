@@ -34,3 +34,24 @@ output "subnet_name" {
   description = "Subnet name"
   value       = google_compute_subnetwork.factory_floor.name
 }
+
+# Shared Load Balancer outputs
+output "load_balancer_ip" {
+  description = "Shared Load Balancer IP address"
+  value       = google_compute_global_forwarding_rule.shared.ip_address
+}
+
+output "url_map_id" {
+  description = "Shared URL map ID (apps add backends here)"
+  value       = google_compute_url_map.shared.id
+}
+
+output "url_map_name" {
+  description = "Shared URL map name"
+  value       = google_compute_url_map.shared.name
+}
+
+output "default_backend_service_id" {
+  description = "Default backend service ID"
+  value       = google_compute_backend_service.default.id
+}

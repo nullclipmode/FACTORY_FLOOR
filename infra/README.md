@@ -8,7 +8,7 @@ Terraform modules for secure, auto-deployed infrastructure.
 Internet
     ↓
 ┌─────────────────────────────────────────────────┐
-│           Google HTTPS Load Balancer            │
+│      SHARED Google HTTPS Load Balancer          │
 │           (Cloud Armor attached)                │
 ├─────────────────────────────────────────────────┤
 │  • DDoS protection                              │
@@ -16,9 +16,14 @@ Internet
 │  • Rate limiting (100 req/min)                  │
 │  • OWASP rules (SQLi, XSS, RCE, LFI)           │
 └─────────────────────────────────────────────────┘
-    ↓
+    ↓                    ↓                    ↓
+┌──────────┐      ┌──────────┐      ┌──────────┐
+│ Backend  │      │ Backend  │      │ Backend  │
+│  App 1   │      │  App 2   │      │  App N   │
+└──────────┘      └──────────┘      └──────────┘
+    ↓                    ↓                    ↓
 ┌─────────────────────────────────────────────────┐
-│              Cloud Run Service                  │
+│              Cloud Run Services                 │
 │           (Internal + LB only)                  │
 ├─────────────────────────────────────────────────┤
 │  • No direct internet access                    │
@@ -33,19 +38,26 @@ Internet
 └─────────────────────────────────────────────────┘
 ```
 
+**Key Architecture Points:**
+- One GCP project for everything
+- One shared HTTPS Load Balancer (not per-app)
+- Cloud Armor attaches to the shared Load Balancer
+- Each app = separate Cloud Run service + backend on shared LB
+- Global infra deployed once, apps add their backends
+
 ## Directory Structure
 
 ```
 infra/
 ├── global/              # One-time global setup
-│   ├── main.tf          # Cloud Armor, IAM, VPC, Cloud Tasks
+│   ├── main.tf          # Cloud Armor, IAM, VPC, Cloud Tasks, SHARED LB
 │   ├── variables.tf
 │   ├── outputs.tf
 │   └── terraform.tfvars.example
 │
 ├── modules/
 │   └── project/         # Per-app module
-│       ├── main.tf      # Cloud Run + Load Balancer
+│       ├── main.tf      # Cloud Run + Backend (on shared LB)
 │       ├── variables.tf
 │       └── outputs.tf
 │
@@ -89,6 +101,8 @@ terraform apply
 
 This creates:
 - Cloud Armor policy (bot blocking, rate limiting, OWASP)
+- **Shared HTTPS Load Balancer** (with Cloud Armor attached)
+- HTTP → HTTPS redirect
 - Cloud Run service account
 - VPC + connector
 - Cloud Tasks queue
@@ -103,7 +117,17 @@ echo -n "your-mixpanel-token" | gcloud secrets versions add mixpanel-token --dat
 echo -n "your-supabase-service-key" | gcloud secrets versions add supabase-service-key --data-file=-
 ```
 
-## Per-Project Deployment
+### 4. Note Load Balancer IP
+
+After `terraform apply`, note the shared Load Balancer IP:
+
+```bash
+terraform output load_balancer_ip
+```
+
+All your apps will be accessible via this single IP (via path-based routing).
+
+## Per-App Deployment
 
 ### Option A: Via /new-app (Automated)
 
@@ -115,7 +139,7 @@ This will:
 1. Create GitHub repo
 2. Create Vercel project
 3. Create Supabase project
-4. Run Terraform to create Cloud Run + LB
+4. Run Terraform to create Cloud Run + backend on shared LB
 5. Wire all secrets
 6. Deploy initial code
 
@@ -154,13 +178,13 @@ module "app" {
 
   app_name                        = "my-app"
   gcp_project_id                  = "your-project-id"
-  cloud_armor_policy_name         = data.terraform_remote_state.global.outputs.cloud_armor_policy_name
+  url_map_name                    = data.terraform_remote_state.global.outputs.url_map_name
   cloud_run_service_account_email = data.terraform_remote_state.global.outputs.cloud_run_service_account_email
   vpc_connector_id                = data.terraform_remote_state.global.outputs.vpc_connector_id
 }
 
-output "load_balancer_ip" {
-  value = module.app.load_balancer_ip
+output "backend_service_id" {
+  value = module.app.backend_service_id
 }
 EOF
 
@@ -168,9 +192,20 @@ terraform init
 terraform apply
 ```
 
+After creating the app, you need to add its backend to the shared URL map (path-based routing):
+
+```bash
+# Add path rule to shared URL map (manual step or via gcloud)
+gcloud compute url-maps add-path-matcher factory-floor-urlmap \
+  --path-matcher-name=my-app-matcher \
+  --default-service=ff-my-app-backend \
+  --path-rules="/my-app/*=ff-my-app-backend"
+```
+
 ## Security Checklist
 
-- [x] Cloud Armor attached to all backends
+- [x] **One shared Load Balancer** for all apps
+- [x] Cloud Armor attached to shared LB (protects all apps)
 - [x] Cloud Run set to internal + LB only
 - [x] Bot User-Agents blocked
 - [x] Rate limiting enabled
@@ -184,12 +219,12 @@ terraform apply
 | Resource | Cost |
 |----------|------|
 | Cloud Armor | ~$5/month |
-| Load Balancer | ~$18/month |
-| Cloud Run | Pay per use |
+| **Load Balancer (shared)** | **~$18/month** |
+| Cloud Run (per app) | Pay per use |
 | VPC Connector | ~$7/month |
 | **Total Fixed** | **~$30/month** |
 
-Cloud Run scales to zero, so you only pay for traffic.
+**Note:** The Load Balancer is a fixed cost shared across ALL apps. Each new app only adds Cloud Run usage costs (pay per request).
 
 ## Rollback
 
@@ -198,7 +233,7 @@ Cloud Run scales to zero, so you only pay for traffic.
 cd infra/projects/my-app
 terraform destroy
 
-# Destroy global (careful!)
+# Destroy global (careful! removes LB for ALL apps)
 cd infra/global
 terraform destroy
 ```
@@ -217,3 +252,7 @@ terraform destroy
 ### Rate limited
 - Check Cloud Armor logs
 - Adjust rate limit threshold in `global/main.tf`
+
+### New app not reachable
+- Verify backend was added to shared URL map
+- Check path rules: `gcloud compute url-maps describe factory-floor-urlmap`

@@ -22,8 +22,8 @@ variable "gcp_region" {
   default     = "us-central1"
 }
 
-variable "cloud_armor_policy_name" {
-  description = "Cloud Armor policy name (from global module)"
+variable "url_map_name" {
+  description = "Shared URL map name (from global module)"
   type        = string
 }
 

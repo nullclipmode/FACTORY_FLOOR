@@ -287,3 +287,70 @@ resource "google_cloud_tasks_queue" "default" {
 
   depends_on = [google_project_service.apis]
 }
+
+# ============================================
+# SHARED HTTPS LOAD BALANCER
+# One LB for all apps, each app adds a backend
+# ============================================
+
+# URL map - default backend (placeholder, apps add path rules)
+# Initially points to a default backend, apps add path-based routing
+resource "google_compute_url_map" "shared" {
+  name            = "factory-floor-urlmap"
+  description     = "Shared URL map for all Factory Floor apps"
+  default_service = google_compute_backend_service.default.id
+}
+
+# Default backend (returns 404 for unmatched routes)
+resource "google_compute_backend_service" "default" {
+  name        = "factory-floor-default-backend"
+  protocol    = "HTTP"
+  port_name   = "http"
+  timeout_sec = 10
+
+  # Attach Cloud Armor to the shared LB
+  security_policy = google_compute_security_policy.factory_floor.id
+
+  # No backends - returns error for unmatched paths
+  # Each app adds its own backend via path rules
+}
+
+# HTTPS proxy
+resource "google_compute_target_https_proxy" "shared" {
+  name             = "factory-floor-https-proxy"
+  url_map          = google_compute_url_map.shared.id
+  ssl_certificates = [] # Uses default Google-managed cert
+}
+
+# Global forwarding rule (the actual load balancer)
+resource "google_compute_global_forwarding_rule" "shared" {
+  name                  = "factory-floor-lb"
+  ip_protocol           = "TCP"
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+  port_range            = "443"
+  target                = google_compute_target_https_proxy.shared.id
+}
+
+# HTTP to HTTPS redirect
+resource "google_compute_url_map" "http_redirect" {
+  name = "factory-floor-http-redirect"
+
+  default_url_redirect {
+    https_redirect         = true
+    redirect_response_code = "MOVED_PERMANENTLY_DEFAULT"
+    strip_query            = false
+  }
+}
+
+resource "google_compute_target_http_proxy" "http_redirect" {
+  name    = "factory-floor-http-proxy"
+  url_map = google_compute_url_map.http_redirect.id
+}
+
+resource "google_compute_global_forwarding_rule" "http_redirect" {
+  name                  = "factory-floor-http-lb"
+  ip_protocol           = "TCP"
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+  port_range            = "80"
+  target                = google_compute_target_http_proxy.http_redirect.id
+}
