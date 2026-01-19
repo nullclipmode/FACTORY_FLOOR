@@ -1,6 +1,6 @@
 # Factory Floor - Session State
-**Last Updated**: 2026-01-19
-**Status**: System Cleaned & Backed Up - Ready to Build
+**Last Updated**: 2026-01-20
+**Status**: Infrastructure Deployed - Ready to Build Apps
 
 ---
 
@@ -296,39 +296,59 @@ Read SESSION_STATE.md and continue the Factory Floor project.
 
 ---
 
-## Infrastructure Setup (One-Time)
+## Infrastructure (DEPLOYED)
 
-**Mental model:**
-- One GCP project (e.g., `factory-floor-prod`)
-- One HTTPS Load Balancer (shared, with Cloud Armor attached)
-- Many apps as separate Cloud Run services (backends on the shared LB)
-- Global infra = once (LB + Cloud Armor + IAM + VPC)
-- `/new-app` = per app (adds Cloud Run service + backend to shared LB)
+### Live Resources
 
-### Prerequisites
-```bash
-brew install google-cloud-sdk
-gcloud auth login
-gcloud auth application-default login
-gcloud config set project YOUR_PROJECT_ID
+| Resource | Value |
+|----------|-------|
+| **GCP Project** | `core-infra-484804` |
+| **Load Balancer IP** | `34.8.93.231` |
+| **Domain** | `nullclipmode.xyz` |
+| **SSL Cert** | `factory-floor-cert` (provisioning) |
+| **Service Account** | `factory-floor-run@core-infra-484804.iam.gserviceaccount.com` |
+
+### What's Deployed
+
+| Component | Name | Status |
+|-----------|------|--------|
+| Cloud Armor | `factory-floor-armor` | Active |
+| Load Balancer | `factory-floor-lb` | Active |
+| VPC | `factory-floor-vpc` | Active |
+| VPC Connector | `factory-floor-connector` | Active |
+| Cloud Tasks | `factory-floor-tasks` | Active |
+| Secrets (shells) | `sentry-dsn`, `mixpanel-token`, `supabase-service-key` | Empty |
+
+### Architecture
+
+```
+Internet
+    ↓
+nullclipmode.xyz (DNS → 34.8.93.231)
+    ↓
+┌─────────────────────────────────────┐
+│   HTTPS Load Balancer               │
+│   + Cloud Armor (attached)          │
+├─────────────────────────────────────┤
+│ • Bot blocking (GPTBot, CCBot...)   │
+│ • OWASP: SQLi, XSS                  │
+└─────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────┐
+│   Cloud Run Services (per app)      │
+│   Internal only - no direct access  │
+└─────────────────────────────────────┘
 ```
 
-### Deploy Global Infrastructure
-```bash
-cd infra/global
-cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars with your GCP project ID
-terraform init
-terraform apply
-```
+### Pending
 
-### Add Secrets
-```bash
-echo -n "your-sentry-dsn" | gcloud secrets versions add sentry-dsn --data-file=-
-echo -n "your-mixpanel-token" | gcloud secrets versions add mixpanel-token --data-file=-
-```
+- [ ] SSL cert activation (10-60 min after DNS propagation)
+- [ ] Secret values (sentry-dsn, mixpanel-token, supabase-service-key)
+- [ ] First app deployment
 
-After this, `/new-app my-app` provisions a new Cloud Run service inside the same GCP project.
+### Cost
+
+~$30/month fixed (LB + Cloud Armor + VPC connector). Cloud Run scales to zero.
 
 ---
 
@@ -336,6 +356,8 @@ After this, `/new-app my-app` provisions a new Cloud Run service inside the same
 
 | Commit | Date | Milestone |
 |--------|------|-----------|
+| (next) | 2026-01-20 | Infrastructure deployed |
+| 0e533cf | 2026-01-20 | Shared Load Balancer architecture |
 | f5ac7d8 | 2026-01-19 | UI Skills for Tailwind |
 | 1547b81 | 2026-01-19 | Linear auto-fix pipeline |
 | 386613d | 2026-01-19 | System cleanup + full backup |
