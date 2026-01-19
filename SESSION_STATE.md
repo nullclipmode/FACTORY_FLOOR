@@ -59,7 +59,7 @@ Removed old "spec ceremony" system:
 | `ralph-review-prompt.md` | Review prompt |
 | `ralph-verify-prompt.md` | Verify prompt |
 
-### ~/.claude/commands/ (8 commands)
+### ~/.claude/commands/ (9 commands)
 | Command | Purpose |
 |---------|---------|
 | `/add-effect` | Add motion effects (parallax, scroll, hover) |
@@ -70,6 +70,7 @@ Removed old "spec ceremony" system:
 | `/fix-issue` | Fix Linear issue via Ralph loop |
 | `/new-app` | Build new app |
 | `/rams` | Accessibility/visual review |
+| `/ui-skills` | Tailwind CSS constraints review |
 
 ### ~/.claude/agents/ (7 agents)
 | Agent | Purpose |
@@ -87,15 +88,16 @@ Removed old "spec ceremony" system:
 |--------|---------|
 | `issue-watcher.sh` | Poll Linear for auto-fix issues (cron) |
 
-### ~/.claude/skills/ (6 Vercel skills)
-| Skill | Purpose |
-|-------|---------|
-| `api-endpoint` | Create API endpoints |
-| `db-migration` | Database migrations |
-| `design-extraction` | Extract design tokens from images |
-| `react-best-practices` | React/Next.js optimization |
-| `vercel-deploy-claimable` | Deploy to Vercel |
-| `web-design-guidelines` | UI review |
+### ~/.claude/skills/ (7 skills)
+| Skill | Purpose | Trigger |
+|-------|---------|---------|
+| `api-endpoint` | Create API endpoints | |
+| `db-migration` | Database migrations | |
+| `design-extraction` | Extract design tokens from images | |
+| `react-best-practices` | React/Next.js optimization | |
+| `ui-skills` | Tailwind CSS constraints | `/ui-skills`, "check tailwind" |
+| `vercel-deploy-claimable` | Deploy to Vercel | |
+| `web-design-guidelines` | Vercel UI guidelines | "review my UI", "check accessibility" |
 
 ### Plugins Enabled (11)
 
