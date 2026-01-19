@@ -9,8 +9,7 @@
     "feature-dev@claude-plugins-official": true,
     "firebase@claude-plugins-official": true,
     "supabase@claude-plugins-official": true,
-    "playwright@claude-plugins-official": true,
-    "linear@claude-plugins-official": true
+    "playwright@claude-plugins-official": true
   },
   "hooks": {
     "PostToolUse": [

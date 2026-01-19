@@ -120,8 +120,9 @@ vercel link --yes
 # Supabase project
 supabase projects create ${APP_NAME} --org-id YOUR_ORG
 
-# Linear project
-# (via Linear plugin)
+# Initialize Beads (issue tracking)
+bd init --prefix ${APP_NAME}
+bd hooks install
 ```
 
 ### 4.3 Application Code
@@ -144,7 +145,7 @@ supabase projects create ${APP_NAME} --org-id YOUR_ORG
 - Vercel: https://${APP_NAME}.vercel.app
 - Cloud Run: https://${APP_NAME}.run.app (via Load Balancer)
 - Supabase: https://app.supabase.com/project/${PROJECT_ID}
-- Linear: ${PROJECT_KEY}
+- Beads: .beads/ initialized (run `bd ready` to see issues)
 
 📊 Infrastructure:
 - Cloud Armor: Attached ✓

@@ -33,7 +33,7 @@ Personal "app factory" system using Claude Code + Ralph loops to build web/mobil
 | **Analytics** | Mixpanel | Product analytics |
 | **Logs** | Cloud Logging | Infrastructure logs |
 | **Code** | GitHub | Repos + CI/CD |
-| **Issues** | Linear | Issue tracking |
+| **Issues** | Beads | Git-backed issue tracking (per-app) |
 
 ### Security Architecture
 ```
@@ -63,6 +63,7 @@ Internet
 - **Playwright MCP** - Browser automation
 - **Claude in Chrome MCP** - Visual browser control
 - **Claude Code** - Orchestration layer
+- **Beads (bd)** - Git-backed issue tracking
 
 ### 2. Architecture
 **Use Claude Plan Mode as router — no custom orchestration.**
@@ -83,6 +84,13 @@ Removed old "spec ceremony" system:
 - Deleted council agents (accessibility-auditor, conversion-architect, council-arbitrator, growth-analyst, seo-architect, simplicity-enforcer, ux-critic)
 - Kept only build/verification focused components
 
+### 5. Beads Integration (2026-01-20)
+Replaced Linear with Beads for issue tracking:
+- Git-backed, AI-agent-optimized
+- Per-app `.beads/` directories (self-contained instances)
+- Auto/manual mode switch with approval-first
+- Automated capture of build/test/runtime failures
+
 ---
 
 ## What's Installed (CURRENT STATE)
@@ -98,7 +106,7 @@ Removed old "spec ceremony" system:
 | `ralph-review-prompt.md` | Review prompt |
 | `ralph-verify-prompt.md` | Verify prompt |
 
-### ~/.claude/commands/ (9 commands)
+### ~/.claude/commands/ (8 commands)
 | Command | Purpose |
 |---------|---------|
 | `/add-effect` | Add motion effects (parallax, scroll, hover) |
@@ -106,8 +114,8 @@ Removed old "spec ceremony" system:
 | `/add-rule` | Capture lessons to CLAUDE.md |
 | `/clone-design` | Clone UI from screenshot |
 | `/deploy-production` | Production deployment |
-| `/fix-issue` | Fix Linear issue via Ralph loop |
-| `/new-app` | Build new app |
+| `/fix-bead` | Fix a bead via Ralph loop (auto/manual mode) |
+| `/new-app` | Build new app (with Beads init) |
 | `/rams` | Accessibility/visual review |
 | `/ui-skills` | Tailwind CSS constraints review |
 
@@ -125,7 +133,9 @@ Removed old "spec ceremony" system:
 ### ~/.claude/scripts/
 | Script | Purpose |
 |--------|---------|
-| `issue-watcher.sh` | Poll Linear for auto-fix issues (cron) |
+| `bead-watcher.sh` | Poll for auto-fix beads (cron) |
+| `bead-capture.sh` | Capture errors as beads |
+| `ci-bead-hook.sh` | CI/CD hook for failure capture |
 
 ### ~/.claude/skills/ (7 skills)
 | Skill | Purpose | Trigger |
@@ -138,7 +148,7 @@ Removed old "spec ceremony" system:
 | `vercel-deploy-claimable` | Deploy to Vercel | |
 | `web-design-guidelines` | Vercel UI guidelines | "review my UI", "check accessibility" |
 
-### Plugins Enabled (11)
+### Plugins Enabled (10)
 
 | Plugin | Type | How It Works |
 |--------|------|--------------|
@@ -152,7 +162,6 @@ Removed old "spec ceremony" system:
 | `firebase` | External | Firebase/GCP integration |
 | `supabase` | External | Supabase backend integration |
 | `playwright` | External | Browser automation/testing |
-| `linear` | External | Linear issue tracking integration |
 
 **Plugin behavior types:**
 - **Auto** - Activates automatically based on context (no command needed)
@@ -200,33 +209,38 @@ For simple tasks, just tell me what to build. Plugins activate automatically as 
 
 ---
 
-## Linear Auto-Fix Pipeline
+## Beads Auto-Fix Pipeline
 
 ### Labels Control Behavior
 | Label | Behavior |
 |-------|----------|
 | `auto-fix` | Full automation - Ralph loop runs automatically |
-| `claude-fix` | Semi-auto - Notifies, waits for `/fix-issue` |
-| (none) | Manual - Human decides |
+| `needs-human` | Requires manual intervention |
+| `ralph-attempts:N` | Tracks fix attempts (max 2) |
 
 ### Pipeline Flow
 ```
-Issue Created
+Bead Created (via capture or manual)
      ↓
-Label Check
+Mode Check
+     ↓
+┌─────────────────────────────────┐
+│ AUTO-FIX LABEL?                 │
+│ YES → Full automation           │
+│ NO  → Manual approval required  │
+└─────────────────────────────────┘
      ↓
 ┌─────────────────────────────────┐
 │ GATE 1: OWNERSHIP               │
 │ ✓ CODEOWNERS exists             │
 │ ✓ Branch protection enabled     │
-│ ✓ Reviewer resolvable           │
-│ FAIL → Downgrade to claude-fix  │
+│ FAIL → Add needs-human label    │
 └─────────────────────────────────┘
      ↓
 ┌─────────────────────────────────┐
 │ GATE 2: ATTEMPT TRACKING        │
 │ Label: ralph-attempts:N         │
-│ IF N >= 2 → Escalate            │
+│ IF N >= 2 → Add needs-human     │
 │ ELSE → Increment                │
 └─────────────────────────────────┘
      ↓
@@ -235,31 +249,133 @@ Generate IMPLEMENTATION_PLAN.md
 ┌─────────────────────────────────┐
 │ GATE 3: PLAN VALIDATOR          │
 │ Is plan grounded in repo?       │
-│ NO → Downgrade to claude-fix    │
+│ NO → Add needs-human label      │
 │ YES → Proceed                   │
 └─────────────────────────────────┘
      ↓
 Ralph Loop Executes
      ↓
-Create PR + Link to Issue
+Create PR + Link to Bead
      ↓
-Move Issue → "In Review"
+Update Bead → "in_progress"
      ↓
 [Human approves + CI passes]
      ↓
-Merge → Issue Closed
+Merge → Bead Closed
 ```
 
-### Setup
-1. Create Linear workspace
-2. Add labels: `auto-fix`, `claude-fix`, `ralph-attempts:1`, `ralph-attempts:2`
-3. Set up cron: `*/5 * * * * ~/.claude/scripts/issue-watcher.sh`
-4. Ensure repo has CODEOWNERS and branch protection
+### Issue Sources
+```
+┌─────────────────────────────────────────────────────┐
+│                   ISSUE SOURCES                     │
+├─────────────────┬─────────────────┬─────────────────┤
+│   CI Failures   │  Runtime Errors │   Manual Input  │
+│  (build, test)  │    (Sentry)     │   (bd create)   │
+└────────┬────────┴────────┬────────┴────────┬────────┘
+         │                 │                 │
+         └─────────────────┼─────────────────┘
+                           ↓
+                  ┌─────────────────┐
+                  │  .beads/ store  │
+                  │  (per-app)      │
+                  └────────┬────────┘
+                           ↓
+              ┌────────────┴────────────┐
+              ↓                         ↓
+     ┌────────────────┐       ┌────────────────┐
+     │   AUTO MODE    │       │  MANUAL MODE   │
+     │ (auto-fix tag) │       │ (approval req) │
+     └───────┬────────┘       └───────┬────────┘
+             ↓                        ↓
+      bead-watcher.sh           /fix-bead
+             ↓                        ↓
+             └──────────┬─────────────┘
+                        ↓
+               ┌────────────────┐
+               │  Ralph Loop    │
+               │  (fresh ctx)   │
+               └───────┬────────┘
+                       ↓
+               ┌────────────────┐
+               │  Pull Request  │
+               └────────────────┘
+```
+
+### Setup (Per App)
+```bash
+# Initialize beads in your app
+cd /path/to/your-app
+bd init --prefix app
+bd hooks install
+
+# Create labels for automation
+bd label create auto-fix
+bd label create needs-human
+bd label create ralph-attempts:1
+bd label create ralph-attempts:2
+
+# Set up cron for auto-fix (optional)
+# */5 * * * * cd /path/to/your-app && ~/.claude/scripts/bead-watcher.sh
+```
 
 ### Manual Trigger
+```bash
+# Manual mode (requires approval)
+/fix-bead bd-a1b2
+
+# Auto mode (no approval)
+/fix-bead bd-a1b2 --auto
+
+# Get next ready bead
+/fix-bead
 ```
-/fix-issue PROJ-123
+
+### Capture Errors as Beads
+```bash
+# Manual capture
+~/.claude/scripts/bead-capture.sh manual "Bug title" "Description"
+
+# Auto-capture (with auto-fix label)
+AUTO_FIX=true ~/.claude/scripts/bead-capture.sh build "Build failed"
+
+# From CI/CD
+~/.claude/scripts/ci-bead-hook.sh build "$JOB_NAME" "$RUN_ID"
 ```
+
+---
+
+## Other Beads Uses
+
+Beyond issue tracking, Beads can be used for:
+
+1. **Feature Planning** - Create epic beads with sub-tasks
+   ```bash
+   bd create "User authentication" -t epic -p 1
+   bd create "Login form" --parent bd-a1b2
+   bd create "OAuth integration" --parent bd-a1b2
+   ```
+
+2. **Technical Debt Tracking** - Label and prioritize
+   ```bash
+   bd create "Refactor database layer" -p 2
+   bd label add bd-a1b2 tech-debt
+   ```
+
+3. **Session Planning** - Track what to work on
+   ```bash
+   bd ready  # What's ready to work on
+   bd list --status in_progress  # What's in progress
+   ```
+
+4. **Cross-App Dependencies** - Link related issues
+   ```bash
+   bd dep add bd-app1-a1b2 bd-app2-c3d4  # app1 depends on app2
+   ```
+
+5. **AI Agent Memory** - Persistent task context
+   ```bash
+   bd prime  # Get AI-optimized context for current session
+   ```
 
 ---
 
@@ -283,6 +399,7 @@ Merge → Issue Closed
 
 **Live installation:**
 - `~/.claude/` - Active system files
+- `~/.local/bin/bd` - Beads CLI
 
 ---
 
@@ -356,8 +473,8 @@ nullclipmode.xyz (DNS → 34.8.93.231)
 
 | Commit | Date | Milestone |
 |--------|------|-----------|
-| (next) | 2026-01-20 | Infrastructure deployed |
-| 0e533cf | 2026-01-20 | Shared Load Balancer architecture |
+| (next) | 2026-01-20 | Beads integration (replace Linear) |
+| 0e533cf | 2026-01-20 | Infrastructure deployed |
 | f5ac7d8 | 2026-01-19 | UI Skills for Tailwind |
 | 1547b81 | 2026-01-19 | Linear auto-fix pipeline |
 | 386613d | 2026-01-19 | System cleanup + full backup |
