@@ -87,21 +87,71 @@ Present findings:
 
 ## Phase 4: Build
 
-1. Create GitHub repository
-2. Initialize framework with dependencies
-3. Create full project structure (frontend + backend if needed)
-4. Create .claude/CLAUDE.md with project specifics
-5. Create CI/CD pipeline
-6. Create database schema
-7. Create documentation (README, SPEC, TECHNICAL)
-8. Create legal pages
-9. Initial commit and push
+### 4.1 Infrastructure (Terraform)
+
+If backend needed:
+```bash
+# Create project terraform config
+mkdir -p infra/projects/${APP_NAME}
+cd infra/projects/${APP_NAME}
+
+# Generate main.tf from template
+# Uses global Cloud Armor, IAM, VPC from infra/global
+
+terraform init
+terraform apply -auto-approve
+```
+
+This creates:
+- Cloud Run service (internal + LB only)
+- HTTPS Load Balancer with Cloud Armor
+- Per-project secrets in Secret Manager
+- HTTP→HTTPS redirect
+
+### 4.2 External Services
+
+```bash
+# GitHub repo
+gh repo create ${APP_NAME} --private --clone
+
+# Vercel project (linked to GitHub)
+vercel link --yes
+
+# Supabase project
+supabase projects create ${APP_NAME} --org-id YOUR_ORG
+
+# Linear project
+# (via Linear plugin)
+```
+
+### 4.3 Application Code
+
+1. Initialize framework with dependencies
+2. Create full project structure (frontend + backend if needed)
+3. Create .claude/CLAUDE.md with project specifics
+4. Create CI/CD pipeline (GitHub Actions → Vercel + Cloud Run)
+5. Create database schema (Supabase migrations)
+6. Create documentation (README, SPEC, TECHNICAL)
+7. Create legal pages
+8. Initial commit and push
+9. Wire secrets to Secret Manager
 10. Deploy to staging
 
 ## Phase 5: Report
 
-✅ Completed (with links)
-📊 Status
+✅ Completed:
+- GitHub: https://github.com/YOU/${APP_NAME}
+- Vercel: https://${APP_NAME}.vercel.app
+- Cloud Run: https://${APP_NAME}.run.app (via Load Balancer)
+- Supabase: https://app.supabase.com/project/${PROJECT_ID}
+- Linear: ${PROJECT_KEY}
+
+📊 Infrastructure:
+- Cloud Armor: Attached ✓
+- Rate Limiting: 100 req/min ✓
+- Bot Blocking: Active ✓
+- OWASP Rules: Active ✓
+
 ➡️ Next Steps (which feature first?)
 
 ## Reminders

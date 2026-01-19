@@ -10,10 +10,49 @@ Personal "app factory" system using Claude Code + Ralph loops to build web/mobil
 ---
 
 ## What I Build
-- **Web apps** - Google stack architecture (Firebase, GCP)
+- **Web apps** - Google stack architecture (GCP, Supabase)
 - **Mobile apps** - iOS/Android
 - **API integrations** - Web apps utilizing external APIs
 - **Python scripts** - Automation, data processing, backends
+
+---
+
+## Production Stack
+
+| Layer | Service | Purpose |
+|-------|---------|---------|
+| **Frontend** | Vercel | Web hosting, edge functions |
+| **Backend** | Cloud Run | APIs, workers (via Load Balancer) |
+| **Database** | Supabase | Postgres + Auth + RLS |
+| **Files** | Google Cloud Storage | Artifacts, uploads |
+| **Security** | Cloud Armor | WAF, DDoS, bot blocking |
+| **Secrets** | Secret Manager | API keys, credentials |
+| **Tasks** | Cloud Tasks | Async jobs, retries |
+| **AI** | Vertex AI | Models, inference |
+| **Errors** | Sentry | Crash reporting |
+| **Analytics** | Mixpanel | Product analytics |
+| **Logs** | Cloud Logging | Infrastructure logs |
+| **Code** | GitHub | Repos + CI/CD |
+| **Issues** | Linear | Issue tracking |
+
+### Security Architecture
+```
+Internet
+    ↓
+┌─────────────────────────────────────┐
+│   HTTPS Load Balancer               │
+│   + Cloud Armor (attached)          │
+├─────────────────────────────────────┤
+│ • Bot blocking (GPTBot, CCBot...)   │
+│ • Rate limit: 100 req/min           │
+│ • OWASP: SQLi, XSS, RCE, LFI        │
+└─────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────┐
+│   Cloud Run (internal only)         │
+│   No direct internet access         │
+└─────────────────────────────────────┘
+```
 
 ---
 
@@ -237,6 +276,11 @@ Merge → Issue Closed
 - `system-backup/settings.json` - Claude settings
 - `system-backup/CLAUDE.md` - Global instructions
 
+**Infrastructure (Terraform):**
+- `infra/global/` - One-time global setup (Cloud Armor, IAM, VPC)
+- `infra/modules/project/` - Per-app module (Cloud Run + LB)
+- `infra/README.md` - Setup instructions
+
 **Live installation:**
 - `~/.claude/` - Active system files
 
@@ -250,10 +294,41 @@ Read SESSION_STATE.md and continue the Factory Floor project.
 
 ---
 
+---
+
+## Infrastructure Setup (One-Time)
+
+### Prerequisites
+```bash
+brew install google-cloud-sdk
+gcloud auth login
+gcloud auth application-default login
+gcloud config set project YOUR_PROJECT_ID
+```
+
+### Deploy Global Infrastructure
+```bash
+cd infra/global
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your GCP project ID
+terraform init
+terraform apply
+```
+
+### Add Secrets
+```bash
+echo -n "your-sentry-dsn" | gcloud secrets versions add sentry-dsn --data-file=-
+echo -n "your-mixpanel-token" | gcloud secrets versions add mixpanel-token --data-file=-
+```
+
+---
+
 ## Git History
 
 | Commit | Date | Milestone |
 |--------|------|-----------|
+| f5ac7d8 | 2026-01-19 | UI Skills for Tailwind |
+| 1547b81 | 2026-01-19 | Linear auto-fix pipeline |
+| 386613d | 2026-01-19 | System cleanup + full backup |
 | c8825bc | 2026-01-19 | Remove reference templates |
 | 217f097 | 2026-01-19 | Initial commit |
-| (next) | 2026-01-19 | System cleanup + full backup |
