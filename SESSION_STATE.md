@@ -305,7 +305,7 @@ Read SESSION_STATE.md and continue the Factory Floor project.
 | **GCP Project** | `core-infra-484804` |
 | **Load Balancer IP** | `34.8.93.231` |
 | **Domain** | `nullclipmode.xyz` |
-| **SSL Cert** | `factory-floor-cert` (provisioning) |
+| **SSL Cert** | `factory-floor-cert` (ACTIVE) |
 | **Service Account** | `factory-floor-run@core-infra-484804.iam.gserviceaccount.com` |
 
 ### What's Deployed
@@ -342,8 +342,8 @@ nullclipmode.xyz (DNS → 34.8.93.231)
 
 ### Pending
 
-- [ ] SSL cert activation (10-60 min after DNS propagation)
-- [ ] Secret values (sentry-dsn, mixpanel-token, supabase-service-key)
+- [x] SSL cert activation
+- [ ] Secret values (added per-app as needed)
 - [ ] First app deployment
 
 ### Cost
