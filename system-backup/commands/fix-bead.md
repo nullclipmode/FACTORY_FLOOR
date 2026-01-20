@@ -16,6 +16,10 @@ Fix a bead by generating a plan and executing via Ralph loop.
 
 If empty, get next ready bead via `bd ready`.
 
+**Task Types:**
+- **AUTO**: Has executable acceptance criteria (tests/commands) - can run unattended
+- **HITL**: Has `hitl` label - requires human approval, blocks downstream tasks
+
 ---
 
 ## Mode Detection
@@ -56,8 +60,58 @@ Extract:
 - Description
 - Priority
 - Labels
-- Dependencies
+- Dependencies (blockers)
 - **Acceptance criteria** (REQUIRED for auto mode)
+
+### 1.5 HITL Gate
+
+**Check if this bead requires human approval:**
+
+```bash
+LABELS=$(bd show "$BEAD_ID" --json | jq -r '.labels[]?')
+
+if echo "$LABELS" | grep -q "^hitl$"; then
+    echo "═══════════════════════════════════════════════════"
+    echo "HITL BEAD: $BEAD_ID"
+    echo "═══════════════════════════════════════════════════"
+    echo ""
+    echo "This bead requires HUMAN approval (taste/judgment)."
+    echo "Agent cannot auto-complete HITL tasks."
+    echo ""
+    echo "To approve: /hitl-approve $BEAD_ID"
+    echo "To reject:  bd update $BEAD_ID --status blocked --reason 'needs rework'"
+    echo ""
+    echo "═══════════════════════════════════════════════════"
+    exit 0
+fi
+```
+
+### 1.6 Dependency Gate
+
+**Check if blocked by incomplete beads:**
+
+```bash
+BLOCKERS=$(bd show "$BEAD_ID" --json | jq -r '.blocks[]?' 2>/dev/null)
+
+if [ -n "$BLOCKERS" ]; then
+    BLOCKED=false
+    BLOCKING_BEADS=""
+
+    for blocker in $BLOCKERS; do
+        STATUS=$(bd show "$blocker" --json | jq -r '.status')
+        if [ "$STATUS" != "done" ]; then
+            BLOCKED=true
+            BLOCKING_BEADS="$BLOCKING_BEADS $blocker($STATUS)"
+        fi
+    done
+
+    if [ "$BLOCKED" = "true" ]; then
+        echo "BLOCKED: Waiting on:$BLOCKING_BEADS"
+        echo "Complete blocking beads first, or remove dependency."
+        exit 1
+    fi
+fi
+```
 
 ### 2. Acceptance Criteria Gate (AUTO MODE ONLY)
 
@@ -324,6 +378,8 @@ RESULT:
 | Error | Action |
 |-------|--------|
 | Bead not found | Prompt for valid ID |
+| **HITL bead** | **Stop, surface for human approval** |
+| **Blocked by incomplete bead** | **Stop, list blockers** |
 | No acceptance criteria (auto mode) | Block, require criteria |
 | Non-executable criteria (auto mode) | Block, explain format |
 | Ownership gate fail | Stop, output reason |
@@ -376,3 +432,41 @@ bd create "Add login endpoint"  # No acceptance criteria
 bd create "Add login endpoint" \
   --acceptance "login should work"  # Not executable
 ```
+
+## HITL (Human-in-the-Loop) Workflow
+
+For tasks requiring human judgment (UI review, copy approval, taste decisions):
+
+```bash
+# Create HITL bead - no acceptance criteria, has hitl label
+bd create "Review login page design" --label hitl
+
+# Create AUTO bead that depends on HITL approval
+bd create "Wire login to API" \
+  --acceptance "tests/e2e/login.spec.ts" \
+  --blocks "ff-abc"  # ff-abc is the HITL bead
+
+# Workflow:
+# 1. Agent runs through AUTO beads
+# 2. Hits HITL bead → pauses, surfaces for human
+# 3. Human reviews, approves with /hitl-approve ff-abc
+# 4. Agent continues with downstream AUTO beads
+```
+
+**Dependency Graph Example:**
+
+```
+ff-001 (AUTO) Build API endpoint
+    ↓
+ff-002 (AUTO) Add database migration
+    ↓
+ff-003 (HITL) Review UI design ← PAUSE HERE
+    ↓
+ff-004 (AUTO) Wire UI to API
+    ↓
+ff-005 (AUTO) Add E2E tests
+```
+
+Agent completes ff-001, ff-002 automatically.
+Pauses at ff-003, waits for human.
+After `/hitl-approve ff-003`, continues with ff-004, ff-005.

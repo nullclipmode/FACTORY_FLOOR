@@ -58,11 +58,15 @@ if [ "$beads" = "[]" ] || [ -z "$beads" ]; then
     exit 0
 fi
 
-# Filter for auto-fix label
-auto_fix_beads=$(echo "$beads" | jq -r '.[] | select(.labels[]? == "auto-fix") | .id' 2>/dev/null || echo "")
+# Filter for auto-fix label, EXCLUDE hitl beads
+# HITL beads require human approval - never auto-process them
+auto_fix_beads=$(echo "$beads" | jq -r '.[] | select(.labels[]? == "auto-fix") | select((.labels[]? == "hitl") | not) | .id' 2>/dev/null || echo "")
+
+# Count HITL beads for logging
+hitl_count=$(echo "$beads" | jq -r '[.[] | select(.labels[]? == "hitl")] | length' 2>/dev/null || echo "0")
 
 if [ -z "$auto_fix_beads" ]; then
-    log "No auto-fix beads found ($(echo "$beads" | jq length) ready beads, none with auto-fix label)"
+    log "No auto-fix beads found ($(echo "$beads" | jq length) ready, $hitl_count HITL awaiting human)"
     exit 0
 fi
 

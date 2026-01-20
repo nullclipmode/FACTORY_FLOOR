@@ -20,6 +20,7 @@
 | Review Tailwind code | `/ui-skills` |
 | Remember a lesson learned | `/add-rule` |
 | See what's ready to work on | `bd ready` |
+| Approve a human-review task | `/hitl-approve` |
 
 ---
 
@@ -64,6 +65,24 @@
 /fix-bead ff-abc --auto   # Auto mode - just does it
 /fix-bead                 # Gets next ready issue
 ```
+
+---
+
+### `/hitl-approve`
+**What it does:** Approves a HITL (Human-in-the-Loop) bead after you've reviewed it. HITL beads are for things that need human judgment - like "does this UI look right?"
+
+**When to use:** Agent hit a HITL bead and is waiting for your approval.
+
+**Example:**
+```
+/hitl-approve ff-abc      # Approve the bead
+```
+
+**The HITL workflow:**
+1. Agent works through AUTO beads (testable tasks)
+2. Hits a HITL bead → pauses, asks for your review
+3. You review the work, run `/hitl-approve ff-abc`
+4. Agent continues with downstream tasks
 
 ---
 
@@ -136,6 +155,45 @@
 ```
 /add-rule "Never use deprecated API endpoints"
 ```
+
+---
+
+## AUTO vs HITL Tasks
+
+Factory Floor has two task types:
+
+| Type | What it is | How it completes |
+|------|------------|------------------|
+| **AUTO** | Testable tasks | Tests pass → done |
+| **HITL** | Judgment tasks | Human approves → done |
+
+**AUTO tasks** have executable acceptance criteria (test files, curl commands). The agent can complete these without you.
+
+**HITL tasks** require human judgment - UI review, copy approval, "does this feel right?" The agent pauses and waits for you.
+
+### Creating Tasks
+
+```bash
+# AUTO task - has tests, agent can complete alone
+bd create "Add login API" --acceptance "tests/api/login.spec.ts"
+
+# HITL task - needs human eye, agent will pause
+bd create "Review login page design" --label hitl
+
+# AUTO task that waits for HITL approval
+bd create "Wire login to backend" \
+  --acceptance "tests/e2e/login.spec.ts" \
+  --blocks "ff-abc"   # ff-abc is the HITL task
+```
+
+### The Flow
+
+```
+AUTO: Build API     ──→  AUTO: Add migration  ──→  HITL: Review UI  ──→  AUTO: Wire UI
+      (agent)                 (agent)                  (YOU)                (agent)
+```
+
+Agent runs through AUTO tasks automatically. When it hits a HITL task, it stops and asks you. After you approve (`/hitl-approve`), it continues.
 
 ---
 
