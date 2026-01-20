@@ -6,6 +6,8 @@ description: Fix a bead (issue) using Ralph loop with auto/manual mode
 
 Fix a bead by generating a plan and executing via Ralph loop.
 
+**Key principle: Tests define "done". No tests = no auto-close.**
+
 ## Input
 
 `$ARGUMENTS` should be:
@@ -55,9 +57,33 @@ Extract:
 - Priority
 - Labels
 - Dependencies
-- Acceptance criteria
+- **Acceptance criteria** (REQUIRED for auto mode)
 
-### 2. Ownership Gate
+### 2. Acceptance Criteria Gate (AUTO MODE ONLY)
+
+**For auto mode, acceptance criteria MUST be executable.**
+
+```bash
+ACCEPTANCE=$(bd show "$BEAD_ID" --json | jq -r '.acceptance // empty')
+
+if [ "$AUTO_MODE" = "true" ] && [ -z "$ACCEPTANCE" ]; then
+    echo "AUTO MODE BLOCKED: No acceptance criteria"
+    echo "Add with: bd update $BEAD_ID --acceptance 'tests/e2e/feature.spec.ts'"
+    exit 1
+fi
+
+# Validate acceptance is executable (test file or command)
+if [ "$AUTO_MODE" = "true" ]; then
+    # Must be: test file path, test pattern, or shell command
+    if ! echo "$ACCEPTANCE" | grep -qE '(\.spec\.|\.test\.|^npm |^pytest |^go test|^curl )'; then
+        echo "AUTO MODE BLOCKED: Acceptance criteria not executable"
+        echo "Must be test file, test pattern, or verifiable command"
+        exit 1
+    fi
+fi
+```
+
+### 3. Ownership Gate
 
 Check repo is safe for automation:
 
@@ -72,11 +98,10 @@ If ANY check fails:
 - Do NOT proceed
 - Suggest manual fix
 
-### 3. Attempt Tracking
+### 4. Attempt Tracking
 
 Check bead labels for `ralph-attempts:N`:
 ```bash
-# Get current attempt count from labels
 ATTEMPTS=$(bd show "$BEAD_ID" --json | jq -r '.labels[]? | select(startswith("ralph-attempts:")) | split(":")[1] // "0"' | head -1)
 ATTEMPTS=${ATTEMPTS:-0}
 
@@ -86,13 +111,12 @@ if [ "$ATTEMPTS" -ge 2 ]; then
     exit 1
 fi
 
-# Increment counter
 bd label remove "$BEAD_ID" "ralph-attempts:$ATTEMPTS" 2>/dev/null || true
 NEW_ATTEMPTS=$((ATTEMPTS + 1))
 bd label add "$BEAD_ID" "ralph-attempts:$NEW_ATTEMPTS"
 ```
 
-### 4. Manual Approval (if not --auto)
+### 5. Manual Approval (if not --auto)
 
 If `AUTO_MODE=false`:
 ```
@@ -104,6 +128,7 @@ BEAD DETAILS:
   Title: {title}
   Priority: {priority}
   Description: {description}
+  Acceptance: {acceptance criteria}
 
 READY TO PROCEED?
   Enter 'yes' to generate plan and execute
@@ -114,7 +139,7 @@ READY TO PROCEED?
 
 Wait for explicit approval before continuing.
 
-### 5. Generate Plan
+### 6. Generate Plan (TEST-FIRST)
 
 Create `IMPLEMENTATION_PLAN.md` with:
 
@@ -127,47 +152,88 @@ Create `IMPLEMENTATION_PLAN.md` with:
 ## Context
 {bead-description}
 
+## Acceptance Criteria (MUST PASS)
+{acceptance from bead - these are the tests that define done}
+
 ## Steps
-1. {step}
-2. {step}
+
+### Phase 1: Write Failing Tests
+1. Create test file(s) for acceptance criteria
+2. Run tests - verify they FAIL (code doesn't exist yet)
+
+### Phase 2: Implement
+3. {implementation step}
+4. {implementation step}
 ...
 
-## Acceptance Criteria
-- [ ] {criteria from bead}
+### Phase 3: Verify
+N. Run tests - verify they PASS
+N+1. Run full test suite - verify no regressions
 
 ## Files to Modify
 - {file}
 ```
 
-### 6. Plan Validation
+### 7. Plan Validation
 
 Before executing, validate the plan:
 - Are all referenced files real?
 - Are the steps grounded in actual repo structure?
 - Is scope reasonable for the issue?
+- **Does plan include test-first phase?**
 
 If validation FAILS:
 - Add `needs-human` label
 - Output: "Plan validation failed: {reason}. Needs human review."
 - STOP
 
-### 7. Execute Ralph Loop
+### 8. Execute Ralph Loop
 
 ```bash
 ~/.claude/ralph-loop.sh
 ```
 
-### 8. Create PR
+### 9. Completion Validation
 
-After Ralph completes:
+**After Ralph completes, run acceptance criteria:**
+
+```bash
+# Parse acceptance criteria
+ACCEPTANCE=$(bd show "$BEAD_ID" --json | jq -r '.acceptance')
+
+# Run each criterion
+PASS=true
+while IFS= read -r criterion; do
+    echo "Running: $criterion"
+
+    if [[ "$criterion" == *.spec.* ]] || [[ "$criterion" == *.test.* ]]; then
+        # It's a test file
+        npm test -- "$criterion" || PASS=false
+    else
+        # It's a command
+        eval "$criterion" || PASS=false
+    fi
+done <<< "$ACCEPTANCE"
+
+if [ "$PASS" = "false" ]; then
+    echo "COMPLETION VALIDATION FAILED"
+    echo "Acceptance criteria not satisfied"
+    # Increment attempts, don't close
+    exit 1
+fi
+```
+
+### 10. Create PR
+
+After Ralph completes AND acceptance passes:
 - Create branch: `fix/{bead-id}`
 - Commit changes
 - Create PR with:
   - Title: `fix: {bead-title}`
-  - Body: Links to bead ID
+  - Body: Links to bead ID + acceptance criteria results
   - Labels: `auto-generated`
 
-### 9. Update Bead
+### 11. Update Bead
 
 ```bash
 # Mark as in_progress during work
@@ -176,8 +242,10 @@ bd update "$BEAD_ID" --status in_progress
 # After PR created, add note
 bd comments add "$BEAD_ID" "PR created: {pr_url}"
 
-# If PR merged, close bead
-bd close "$BEAD_ID" --reason "Fixed via {pr_url}"
+# ONLY close if acceptance criteria passed
+if [ "$PASS" = "true" ]; then
+    bd close "$BEAD_ID" --reason "Fixed via {pr_url} - all acceptance criteria passed"
+fi
 ```
 
 ---
@@ -193,13 +261,19 @@ MODE: {AUTO | MANUAL}
 STATUS: {RUNNING | COMPLETED | FAILED}
 
 GATES:
+  Acceptance Criteria: {PRESENT | MISSING}
   Ownership: {PASS | FAIL}
   Attempts: {N}/2
   Plan Valid: {PASS | FAIL}
+  Completion Valid: {PASS | FAIL | PENDING}
+
+ACCEPTANCE RESULTS:
+  ✓ tests/e2e/login.spec.ts (5 passed)
+  ✓ tests/unit/auth.test.ts (3 passed)
 
 RESULT:
   PR: {url}
-  Bead: {closed | in_progress}
+  Bead: {closed | in_progress | needs-human}
 
 ═══════════════════════════════════════════════════
 ```
@@ -211,10 +285,13 @@ RESULT:
 | Error | Action |
 |-------|--------|
 | Bead not found | Prompt for valid ID |
+| No acceptance criteria (auto mode) | Block, require criteria |
+| Non-executable criteria (auto mode) | Block, explain format |
 | Ownership gate fail | Stop, output reason |
 | Max attempts | Add needs-human label, stop |
 | Plan validation fail | Add needs-human label, stop |
 | Ralph loop fail | Increment attempts, stop |
+| **Acceptance tests fail** | **Increment attempts, don't close** |
 | PR creation fail | Output error, keep changes |
 
 ---
@@ -225,7 +302,7 @@ RESULT:
 # Manual mode (default) - requires approval
 /fix-bead bd-a1b2
 
-# Auto mode - full automation
+# Auto mode - requires executable acceptance criteria
 /fix-bead bd-a1b2 --auto
 
 # Get next ready bead (manual mode)
@@ -233,4 +310,29 @@ RESULT:
 
 # Get next ready bead (auto mode)
 /fix-bead --auto
+```
+
+## Creating Beads for Auto-Fix
+
+```bash
+# Good - executable acceptance criteria
+bd create "Add login endpoint" \
+  --acceptance "tests/e2e/login.spec.ts"
+
+# Good - multiple criteria
+bd create "Add user auth" \
+  --acceptance "tests/e2e/login.spec.ts
+tests/e2e/logout.spec.ts
+tests/unit/auth.test.ts"
+
+# Good - command-based
+bd create "Fix health endpoint" \
+  --acceptance "curl -sf http://localhost:3000/api/health"
+
+# Bad - won't work in auto mode
+bd create "Add login endpoint"  # No acceptance criteria
+
+# Bad - won't work in auto mode
+bd create "Add login endpoint" \
+  --acceptance "login should work"  # Not executable
 ```
