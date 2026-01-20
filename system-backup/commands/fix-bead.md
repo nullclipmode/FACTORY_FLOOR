@@ -187,10 +187,48 @@ If validation FAILS:
 - Output: "Plan validation failed: {reason}. Needs human review."
 - STOP
 
+### 7.5 Lock Test Files (After Phase 1 Complete)
+
+**After test files are created and verified failing, lock them:**
+
+```bash
+# Extract test files from Phase 1 of the plan
+TEST_FILES=$(grep -oE 'tests?/[^ ]+\.(spec|test)\.(ts|tsx|js|jsx)' IMPLEMENTATION_PLAN.md | sort -u)
+
+# Store list for later unlock
+echo "$TEST_FILES" > .locked-test-files
+
+# Make read-only for implementation phase
+for f in $TEST_FILES; do
+    if [ -f "$f" ]; then
+        chmod 444 "$f"
+        echo "LOCKED: $f"
+    fi
+done
+```
+
+**If agent attempts to modify locked test files during Phase 2:**
+- FAIL immediately
+- Add `needs-human` label
+- Output: "SECURITY: Agent attempted to modify test files during implementation"
+- This is a gaming attempt - escalate to human
+
 ### 8. Execute Ralph Loop
 
 ```bash
 ~/.claude/ralph-loop.sh
+```
+
+### 8.5 Unlock Test Files (After Ralph Complete)
+
+```bash
+# Restore write permissions for completion validation
+if [ -f .locked-test-files ]; then
+    while IFS= read -r f; do
+        chmod 644 "$f" 2>/dev/null || true
+    done < .locked-test-files
+    rm .locked-test-files
+fi
 ```
 
 ### 9. Completion Validation
@@ -265,6 +303,7 @@ GATES:
   Ownership: {PASS | FAIL}
   Attempts: {N}/2
   Plan Valid: {PASS | FAIL}
+  Test Lock: {ACTIVE | RELEASED | VIOLATED}
   Completion Valid: {PASS | FAIL | PENDING}
 
 ACCEPTANCE RESULTS:
@@ -290,6 +329,7 @@ RESULT:
 | Ownership gate fail | Stop, output reason |
 | Max attempts | Add needs-human label, stop |
 | Plan validation fail | Add needs-human label, stop |
+| **Test file modification attempt** | **SECURITY FAIL, needs-human, stop** |
 | Ralph loop fail | Increment attempts, stop |
 | **Acceptance tests fail** | **Increment attempts, don't close** |
 | PR creation fail | Output error, keep changes |
