@@ -17,6 +17,7 @@ VERIFY_RETRIES=5
 REVIEW_RETRIES=3
 REPLAN_AFTER=5
 MAX_ITERATIONS=${RALPH_MAX_ITERATIONS:-50}
+MAX_BEAD_ATTEMPTS=3
 
 # Colors
 RED='\033[0;31m'
@@ -95,6 +96,7 @@ fi
 
 retry_count=0
 current_bead_id=""
+bead_total_attempts=0
 iteration=0
 
 while true; do
@@ -145,9 +147,24 @@ while true; do
     if [ "$BEAD_ID" != "$current_bead_id" ]; then
         current_bead_id="$BEAD_ID"
         retry_count=0
+        bead_total_attempts=0
         # Mark as in_progress
         bd update "$BEAD_ID" --status in_progress 2>/dev/null
     fi
+
+    # Check total attempts BEFORE incrementing (Option B - prevents off-by-one)
+    if [ "$bead_total_attempts" -ge "$MAX_BEAD_ATTEMPTS" ]; then
+        echo -e "${RED}Bead failed after $MAX_BEAD_ATTEMPTS full cycles${NC}"
+        bd update "$BEAD_ID" --status blocked 2>/dev/null
+        bd label add "$BEAD_ID" hitl 2>/dev/null
+        bd comments add "$BEAD_ID" "Failed $MAX_BEAD_ATTEMPTS full cycles. Needs human review." 2>/dev/null
+        echo -e "${YELLOW}Bead $BEAD_ID marked blocked + hitl${NC}"
+        echo ""
+        echo -e "${BLUE}Current bead state:${NC}"
+        bd prime 2>/dev/null
+        exit 2
+    fi
+    bead_total_attempts=$((bead_total_attempts + 1))
 
     echo -e "${YELLOW}Running Ralph (attempt $((retry_count + 1))/$MAX_RETRIES)...${NC}"
     echo "Bead: $BEAD_ID - $BEAD_TITLE"
