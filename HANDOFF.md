@@ -35,9 +35,9 @@ Git-native, AI-optimized issue tracker. Replaces Linear/Jira.
 
 **Commands**:
 ```bash
-bead new "title"     # Create issue
-bead list            # Show open issues
-bead close <id>      # Complete issue
+bd create "title"    # Create issue
+bd list              # Show open issues
+bd close <id>        # Complete issue
 ```
 
 **Statuses**: `open`, `in_progress`, `hitl`, `closed`
@@ -52,6 +52,7 @@ Tasks requiring human judgment are marked `status: hitl`. AI must await human in
 - Test files are locked—cannot be modified to pass
 - Completion validated against original tests
 - Prevents gaming the system
+- **Enforcement**: `~/.claude/ralph-loop.sh` (source of truth for loop mechanics)
 
 ### 4. Ralph Loop
 Two-mode workflow for complex tasks. Fresh context each iteration.

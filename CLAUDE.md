@@ -25,14 +25,14 @@ Autonomous operation:
 
 ### Beads (Issue Tracking)
 ```bash
-bead new "title"     # Create issue
-bead list            # Show open
-bead close <id>      # Complete
+bd create "title"    # Create issue
+bd list              # Show open
+bd close <id>        # Complete
 ```
 Issues live in `.beads/issues.jsonl`. Check before creating duplicates.
 
 ### Test-First Principle
-Write tests before implementation. Test files locked—cannot be modified to pass. Completion validated against original tests.
+Write tests before implementation. Test files locked—cannot be modified to pass. Completion validated against original tests. Enforcement in `~/.claude/ralph-loop.sh`.
 
 ### HITL Tasks
 Some beads require human judgment (design approval, ambiguous specs). Check `status: hitl` before auto-proceeding.
