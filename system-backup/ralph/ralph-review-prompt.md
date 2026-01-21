@@ -39,5 +39,27 @@ Fix: [brief suggestion]
 - If unsure, flag as question: "[file:line] - Is X intentional?"
 - You're a second opinion, not a blocker
 
+## Examples
+
+Example 1 - No issues:
+```
+<review>APPROVED</review>
+```
+
+Example 2 - Clear bug:
+```
+<review>NEEDS_WORK</review>
+Issues:
+1. [src/auth.js:42] - Null check missing before accessing user.id
+Fix: Add guard clause
+```
+
+Example 3 - Uncertain:
+```
+<review>NEEDS_WORK</review>
+Issues:
+1. [api/handler.py:88] - Is the timeout of 5000ms intentional? Seems high for this endpoint.
+```
+
 ## Git Diff to Review
 
