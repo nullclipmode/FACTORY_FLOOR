@@ -1,6 +1,6 @@
 # Quality Bar (ship-ready)
 
-- No TODOs in committed code
+- Resolve all TODOs before commit
 - Code compiles
 - Lint/test/build pass (when present)
 - Behavior changes include test adds/updates
