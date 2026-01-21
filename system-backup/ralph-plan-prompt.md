@@ -10,6 +10,7 @@ You are Ralph in PLAN mode. Break the task into atomic steps.
 2. Explore codebase to understand context
 3. Check ~/.claude/skills/ for relevant skills (especially test-first)
 4. Create IMPLEMENTATION_PLAN.md with test-first phases
+5. Create/update CLAUDE.md with stack, structure, commands from plan
 
 ## Output Format
 
@@ -102,5 +103,14 @@ Acceptance criteria must be **observable outcomes**, not implementation details.
 **For subjective criteria** (aesthetics, UX, tone):
 Use LLM-as-judge with binary pass/fail:
 `Acceptance: LLM confirms "hero section has clear visual hierarchy" → yes`
+
+## CLAUDE.md Generation
+
+If this is a new app, create `./CLAUDE.md` using template at `templates/CLAUDE.md.template`:
+- Fill Stack with framework/styling decisions from plan
+- Fill Structure with directories being created
+- Fill Commands with project-specific scripts
+- Fill Notes with any app-specific quirks or constraints
+- Max 30 lines. Only include what differs from Factory Floor defaults.
 
 Now read the TASK and create the plan.
