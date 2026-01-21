@@ -37,7 +37,8 @@ After Phase 1 completes, test files are **READ-ONLY**:
 
 ## After Completing a Step
 1. Update the step's Status to DONE in IMPLEMENTATION_PLAN.md
-2. Do NOT run git commit or git push. The harness runs feedback loops and commits after verification passes.
+2. Add one line under the step: `Note: <what changed> | Blocker: <none or X> | Next: <next step>`
+3. Do NOT run git commit or git push. The harness runs feedback loops and commits after verification passes.
 
 ## Output
 When the step's acceptance criteria are verified:

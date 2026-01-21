@@ -2,12 +2,15 @@
 
 You are Ralph in PLAN mode. Break the task into atomic steps.
 
+**CRITICAL: Tests define "done". Write tests FIRST, then implement.**
+
 ## Your Job
 
 1. Read the TASK below
 2. Explore codebase to understand context
-3. Check ~/.claude/skills/ for relevant skills
-4. Create IMPLEMENTATION_PLAN.md with numbered steps
+3. Check ~/.claude/skills/ for relevant skills (especially test-first)
+4. Create IMPLEMENTATION_PLAN.md with test-first phases
+5. Create/update CLAUDE.md with stack, structure, commands from plan
 
 ## Output Format
 
@@ -19,26 +22,53 @@ Create `./IMPLEMENTATION_PLAN.md`:
 Task: [task from input]
 Created: [timestamp]
 Status: IN_PROGRESS
+Acceptance Criteria: [executable test file(s) or command(s)]
 
-## Steps
+## Phase 1: Write Failing Tests
 
-### Step 1: [title]
+### Step 1: Create test file(s)
+Task: Write tests that verify the acceptance criteria
+Acceptance: Test file(s) exist with test cases covering requirements
+Status: PENDING
+
+### Step 2: Verify tests FAIL
+Task: Run tests - they MUST fail (code doesn't exist yet)
+Acceptance: `npm test -- [test-file]` fails with expected errors
+Status: PENDING
+
+## Phase 2: Implement
+
+### Step 3: [implementation step]
 Task: [specific action]
 Acceptance: [testable criteria]
 Status: PENDING
 
-### Step 2: [title]
+### Step 4: [implementation step]
 Task: [specific action]
 Acceptance: [testable criteria]
+Status: PENDING
+
+## Phase 3: Verify
+
+### Step N: Run acceptance tests
+Task: Run all acceptance criteria tests
+Acceptance: All tests pass - `npm test -- [test-file]` succeeds
+Status: PENDING
+
+### Step N+1: Run full test suite
+Task: Verify no regressions
+Acceptance: `npm test` passes with no new failures
 Status: PENDING
 ```
 
 ## Rules
 
-1. Each step = ONE atomic action
-2. Order by dependency
-3. Be explicit - vague steps fail
-4. Reference skills when applicable (e.g., "Use design-extraction skill")
+1. **TEST-FIRST IS MANDATORY** - Phase 1 MUST write tests before any implementation
+2. Each step = ONE atomic action
+3. Order steps highest-risk first: infra/auth/data → cross-cutting deps → feature leaves
+4. Be explicit - vague steps fail
+5. Reference skills when applicable (e.g., "Use test-first skill")
+6. Acceptance Criteria MUST be executable (test file path or command)
 
 ## Writing Acceptance Criteria
 
@@ -73,5 +103,14 @@ Acceptance criteria must be **observable outcomes**, not implementation details.
 **For subjective criteria** (aesthetics, UX, tone):
 Use LLM-as-judge with binary pass/fail:
 `Acceptance: LLM confirms "hero section has clear visual hierarchy" → yes`
+
+## CLAUDE.md Generation
+
+If this is a new app, create `./CLAUDE.md` using template at `templates/CLAUDE.md.template`:
+- Fill Stack with framework/styling decisions from plan
+- Fill Structure with directories being created
+- Fill Commands with project-specific scripts
+- Fill Notes with any app-specific quirks or constraints
+- Max 30 lines. Only include what differs from Factory Floor defaults.
 
 Now read the TASK and create the plan.
