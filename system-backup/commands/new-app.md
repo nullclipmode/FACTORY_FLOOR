@@ -129,14 +129,43 @@ bd hooks install
 
 1. Initialize framework with dependencies
 2. Create full project structure (frontend + backend if needed)
-3. Create .claude/CLAUDE.md with project specifics
-4. Create CI/CD pipeline (GitHub Actions → Vercel + Cloud Run)
-5. Create database schema (Supabase migrations)
-6. Create documentation (README, SPEC, TECHNICAL)
-7. Create legal pages
-8. Initial commit and push
-9. Wire secrets to Secret Manager
-10. Deploy to staging
+3. Create .claude/CLAUDE.md with project specifics (from templates/CLAUDE.md.template)
+4. **Setup linting:**
+   ```bash
+   # ESLint + Prettier
+   npm install -D eslint @eslint/js typescript-eslint prettier eslint-config-prettier
+
+   # Create eslint.config.js
+   cat > eslint.config.js << 'EOF'
+   import js from '@eslint/js';
+   import tseslint from 'typescript-eslint';
+   import prettier from 'eslint-config-prettier';
+
+   export default [
+     js.configs.recommended,
+     ...tseslint.configs.recommended,
+     prettier,
+     { ignores: ['node_modules', '.next', 'dist'] }
+   ];
+   EOF
+
+   # Add lint script to package.json
+   npm pkg set scripts.lint="eslint . --fix"
+
+   # Pre-commit hook (runs lint before each commit)
+   cat > .git/hooks/pre-commit << 'EOF'
+   #!/bin/sh
+   npm run lint || exit 1
+   EOF
+   chmod +x .git/hooks/pre-commit
+   ```
+5. Create CI/CD pipeline (GitHub Actions → Vercel + Cloud Run)
+6. Create database schema (Supabase migrations)
+7. Create documentation (README, SPEC, TECHNICAL)
+8. Create legal pages
+9. Initial commit and push
+10. Wire secrets to Secret Manager
+11. Deploy to staging
 
 ## Phase 5: Report
 
