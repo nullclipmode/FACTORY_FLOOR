@@ -68,6 +68,54 @@ Two-mode workflow for complex tasks. Fresh context each iteration.
 - `IMPLEMENTATION_PLAN.md` - Atomic steps with acceptance criteria
 - `CLAUDE.md` - App-specific context (for new apps)
 
+### 5. Ralph AFK Mode (Docker Sandbox)
+Run Ralph unattended in an isolated container.
+
+**Setup** (one-time):
+```bash
+cd ~/.claude
+docker build -t claude-ralph:latest -f Dockerfile.ralph .
+```
+
+**Run**:
+```bash
+export GITHUB_TOKEN="your-github-token"
+export ANTHROPIC_API_KEY="your-anthropic-key"
+~/.claude/ralph-sandbox.sh /path/to/app
+```
+
+**Security constraints**:
+- Read-only container (except /tmp and /home/claude)
+- All capabilities dropped
+- 4GB memory limit, 2 CPU cores
+- No host filesystem access outside /workspace
+- Git auth via HTTPS/.netrc (no SSH keys)
+
+**Logs**: `app-dir/ralph-YYYYMMDD-HHMMSS.log`
+
+### 6. Maintenance Runner
+Processes lint/typecheck/test beads with Haiku (fast, cheap).
+
+```bash
+~/.claude/ralph-maintenance.sh              # All maintenance beads
+~/.claude/ralph-maintenance.sh class:lint   # Only lint beads
+~/.claude/ralph-maintenance.sh FF-abc123    # Specific bead
+```
+
+**Bead classes** (routed by label):
+| Class | Processed By |
+|-------|-------------|
+| `class:lint` | ralph-maintenance.sh (Haiku) |
+| `class:typecheck` | ralph-maintenance.sh (Haiku) |
+| `class:test` | ralph-maintenance.sh (Haiku) |
+| `class:feature` | ralph-loop.sh (Opus) |
+
+**Create maintenance beads**:
+```bash
+~/.claude/scripts/bead-capture.sh lint "ESLint errors in utils"
+~/.claude/scripts/bead-capture.sh test "Auth tests failing"
+```
+
 ## CLAUDE.md Hierarchy
 
 Three levels, read recursively upward:
@@ -116,6 +164,12 @@ npm run test    # Must pass
 | `ralph-loop.sh` | `~/.claude/` | Orchestrator script |
 | `ralph-plan-prompt.md` | `~/.claude/` | Plan mode instructions |
 | `ralph-build-prompt.md` | `~/.claude/` | Build mode instructions |
+| `ralph-maintenance.sh` | `~/.claude/` | Maintenance bead processor |
+| `ralph-sandbox.sh` | `~/.claude/` | Docker sandbox launcher |
+| `ralph-verify.sh` | `~/.claude/` | Build/test verification |
+| `Dockerfile.ralph` | `~/.claude/` | AFK container definition |
+| `bead-capture.sh` | `~/.claude/scripts/` | Create beads with class labels |
+| `ci-bead-hook.sh` | `~/.claude/scripts/` | CI failure → bead creation |
 | `issues.jsonl` | `.beads/` | Issue storage |
 
 ## Key Constraints

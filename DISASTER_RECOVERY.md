@@ -82,7 +82,18 @@ cp system-backup/CLAUDE.md ~/.claude/
 
 # Make scripts executable
 chmod +x ~/.claude/scripts/*.sh
-chmod +x ~/.claude/ralph-loop.sh
+chmod +x ~/.claude/ralph-*.sh
+```
+
+### Step 5b: Build Docker Image for AFK Mode (Optional)
+
+```bash
+# Install Docker Desktop if not present
+# https://www.docker.com/products/docker-desktop/
+
+# Build the Ralph sandbox container
+cd ~/.claude
+docker build -t claude-ralph:latest -f Dockerfile.ralph .
 ```
 
 ### Step 6: Install Claude Code
@@ -118,7 +129,8 @@ gcloud projects describe core-infra-484804
 | **Claude agents** | `~/.claude/agents/` | `system-backup/agents/` |
 | **Claude skills** | `~/.claude/skills/` | `system-backup/skills/` |
 | **Claude scripts** | `~/.claude/scripts/` | `system-backup/scripts/` |
-| **Ralph loop files** | `~/.claude/ralph-*.md` | `system-backup/ralph/` |
+| **Ralph loop files** | `~/.claude/ralph-*.sh`, `ralph-*.md` | `system-backup/ralph/` |
+| **Docker config** | `~/.claude/Dockerfile.ralph` | In git |
 | **Settings** | `~/.claude/settings.json` | `system-backup/settings.json` |
 | **Global instructions** | `~/.claude/CLAUDE.md` | `system-backup/CLAUDE.md` |
 | **Beads CLI** | `~/.local/bin/bd` | Reinstall from script |
@@ -271,6 +283,14 @@ ls ~/.claude/scripts/*.sh > /dev/null 2>&1 && echo "✓ $(ls ~/.claude/scripts/*
 
 echo -n "Settings: "
 [ -f ~/.claude/settings.json ] && echo "✓" || echo "✗ MISSING"
+
+echo ""
+echo "=== Docker (AFK Mode) ==="
+echo -n "Docker: "
+docker --version > /dev/null 2>&1 && echo "✓" || echo "✗ MISSING (optional)"
+
+echo -n "Ralph image: "
+docker image inspect claude-ralph:latest > /dev/null 2>&1 && echo "✓" || echo "✗ NOT BUILT (run: cd ~/.claude && docker build -t claude-ralph:latest -f Dockerfile.ralph .)"
 
 echo ""
 echo "=== Done ==="

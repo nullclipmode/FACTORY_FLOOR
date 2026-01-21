@@ -303,28 +303,37 @@ bd sync
 ## Scripts (Run in Terminal)
 
 ### `~/.claude/scripts/bead-capture.sh`
-**What it does:** Captures an error as a bead automatically.
+**What it does:** Creates beads with class labels for routing to the correct processor.
 
-**When to use:** Build failed, test failed, want to track it.
+**When to use:** Track lint/typecheck/test/build failures or new features.
 
 ```bash
-# Manual capture
-~/.claude/scripts/bead-capture.sh manual "Bug title" "Description"
-
-# Auto-capture with auto-fix label
-AUTO_FIX=true ~/.claude/scripts/bead-capture.sh build "Build failed"
+# Class-based capture (routes to maintenance or feature runner)
+~/.claude/scripts/bead-capture.sh lint "ESLint errors in utils"
+~/.claude/scripts/bead-capture.sh typecheck "Type errors in API"
+~/.claude/scripts/bead-capture.sh test "Auth tests failing"
+~/.claude/scripts/bead-capture.sh feature "Add dark mode" "Full description"
 ```
+
+**Classes and routing:**
+| Type | Class Label | Processed By |
+|------|-------------|--------------|
+| lint | `class:lint` | `ralph-maintenance.sh` (Haiku) |
+| typecheck | `class:typecheck` | `ralph-maintenance.sh` (Haiku) |
+| test | `class:test` | `ralph-maintenance.sh` (Haiku) |
+| feature | `class:feature` | `ralph-loop.sh` (Opus) |
 
 ---
 
-### `~/.claude/scripts/bead-watcher.sh`
-**What it does:** Polls for beads with `auto-fix` label and processes them automatically.
+### `~/.claude/ralph-maintenance.sh`
+**What it does:** Processes maintenance beads (lint/typecheck/test) using Haiku. Quick fixes only.
 
-**When to use:** Set up as a cron job for fully automated fixes.
+**When to use:** Have lint or test failures to fix automatically.
 
 ```bash
-# Add to crontab for auto-processing every 5 minutes
-# */5 * * * * cd /path/to/project && ~/.claude/scripts/bead-watcher.sh
+~/.claude/ralph-maintenance.sh              # All maintenance beads
+~/.claude/ralph-maintenance.sh class:lint   # Only lint beads
+~/.claude/ralph-maintenance.sh FF-abc123    # Specific bead
 ```
 
 ---
@@ -340,6 +349,52 @@ AUTO_FIX=true ~/.claude/scripts/bead-capture.sh build "Build failed"
 
 # Execute the plan
 ~/.claude/ralph-loop.sh
+```
+
+---
+
+### `~/.claude/ralph-sandbox.sh` (AFK Mode)
+**What it does:** Runs Ralph in an isolated Docker container. For unattended operation.
+
+**When to use:** Leave Claude running overnight or while you're away.
+
+**Setup (one-time):**
+```bash
+cd ~/.claude
+docker build -t claude-ralph:latest -f Dockerfile.ralph .
+```
+
+**Run:**
+```bash
+export GITHUB_TOKEN="your-github-token"
+export ANTHROPIC_API_KEY="your-anthropic-key"
+~/.claude/ralph-sandbox.sh /path/to/app
+```
+
+**Security:**
+- Read-only container
+- 4GB memory, 2 CPUs
+- No host filesystem access outside /workspace
+- Git via HTTPS (no SSH)
+- All capabilities dropped
+
+**Logs:** `app-dir/ralph-YYYYMMDD-HHMMSS.log`
+
+---
+
+### `~/.claude/ralph-verify.sh`
+**What it does:** Runs lint + build + tests with quiet output. Shows ✓/✗ per step, details only on failure.
+
+**When to use:** Quick verification before marking work complete.
+
+```bash
+~/.claude/ralph-verify.sh
+# Output:
+#   ✓ lint
+#   ✓ build
+#   ✗ tests
+#   [error details...]
+#   VERIFY_RESULT=FAIL:TESTS
 ```
 
 ---
