@@ -1,28 +1,14 @@
-# Global Claude Instructions
+# Global Instructions
 
-## Plan Mode
-- Concise plans. Sacrifice grammar for brevity.
+## Style
+- Concise output. Brevity over grammar.
+
+## Planning
 - List unresolved questions at end.
 
-## Ralph Pattern
-
-One script, two modes. Fresh context each iteration.
-
+## Ralph Loop
 ```bash
-# Plan mode - creates IMPLEMENTATION_PLAN.md
-~/.claude/ralph-loop.sh plan "Add user authentication"
-
-# Build mode - executes plan step by step
-~/.claude/ralph-loop.sh
+~/.claude/ralph-loop.sh plan "task"  # Plan mode
+~/.claude/ralph-loop.sh              # Build mode
 ```
-
-### Files
-- `~/.claude/ralph-loop.sh` - orchestrator script
-- `~/.claude/ralph-plan-prompt.md` - plan mode instructions
-- `~/.claude/ralph-build-prompt.md` - build mode instructions
-- `./IMPLEMENTATION_PLAN.md` - plan output (project root)
-
-### When to Use
-- Multi-file changes
-- Sequential steps with dependencies
-- Tasks where context pollution hurts quality
+Use for multi-file changes or sequential dependencies.
