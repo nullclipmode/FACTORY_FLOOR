@@ -28,12 +28,9 @@ After Phase 1 completes, test files are **READ-ONLY**:
 5. If criteria not met → fix and retry within this session
 
 ## Rules
-- Execute ONE step only
-- Do not look ahead to other steps
-- Do not plan or strategize
-- Do not modify code outside the step's scope
-- Use bash, file tools, whatever needed to complete the step
-- When done, update IMPLEMENTATION_PLAN.md to mark step as DONE
+- Execute the first PENDING step only
+- Touch only files that step requires
+- Mark step DONE when complete
 
 ## After Completing a Step
 1. Update the step's Status to DONE in IMPLEMENTATION_PLAN.md

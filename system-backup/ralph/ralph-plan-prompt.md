@@ -1,116 +1,104 @@
 # Ralph Plan Mode
 
-You are Ralph in PLAN mode. Break the task into atomic steps.
+Break task into atomic, test-first steps.
 
-**CRITICAL: Tests define "done". Write tests FIRST, then implement.**
+## Process
+1. Read TASK
+2. Explore codebase for context
+3. Check ~/.claude/skills/ for relevant patterns
+4. Create IMPLEMENTATION_PLAN.md (format below)
+5. Update CLAUDE.md with stack/structure/commands
 
-## Your Job
-
-1. Read the TASK below
-2. Explore codebase to understand context
-3. Check ~/.claude/skills/ for relevant skills (especially test-first)
-4. Create IMPLEMENTATION_PLAN.md with test-first phases
-5. Create/update CLAUDE.md with stack, structure, commands from plan
-
-## Output Format
-
-Create `./IMPLEMENTATION_PLAN.md`:
+## IMPLEMENTATION_PLAN.md Format
 
 ```markdown
 # Implementation Plan
-
-Task: [task from input]
+Task: [from input]
 Created: [timestamp]
 Status: IN_PROGRESS
-Acceptance Criteria: [executable test file(s) or command(s)]
+Acceptance: [test file(s) or command(s) that prove done]
 
-## Phase 1: Write Failing Tests
+## Phase 1: Failing Tests
 
-### Step 1: Create test file(s)
-Task: Write tests that verify the acceptance criteria
-Acceptance: Test file(s) exist with test cases covering requirements
-Status: PENDING
+Step 1: Create test file(s)
+- Task: Write tests covering requirements
+- Done: Test files exist
+- Status: PENDING
 
-### Step 2: Verify tests FAIL
-Task: Run tests - they MUST fail (code doesn't exist yet)
-Acceptance: `npm test -- [test-file]` fails with expected errors
-Status: PENDING
+Step 2: Verify tests fail
+- Task: Run tests before implementation
+- Done: Tests fail as expected
+- Status: PENDING
 
 ## Phase 2: Implement
 
-### Step 3: [implementation step]
-Task: [specific action]
-Acceptance: [testable criteria]
-Status: PENDING
-
-### Step 4: [implementation step]
-Task: [specific action]
-Acceptance: [testable criteria]
-Status: PENDING
+Step 3: [name]
+- Task: [specific action]
+- Done: [observable result]
+- Review: AUTO | HITL
+- Status: PENDING
 
 ## Phase 3: Verify
 
-### Step N: Run acceptance tests
-Task: Run all acceptance criteria tests
-Acceptance: All tests pass - `npm test -- [test-file]` succeeds
-Status: PENDING
+Step N: Run acceptance tests
+- Task: Execute acceptance test suite
+- Done: All tests pass
+- Status: PENDING
 
-### Step N+1: Run full test suite
-Task: Verify no regressions
-Acceptance: `npm test` passes with no new failures
-Status: PENDING
+Step N+1: Run full suite
+- Task: Execute full test suite
+- Done: No regressions
+- Status: PENDING
 ```
 
 ## Rules
-
-1. **TEST-FIRST IS MANDATORY** - Phase 1 MUST write tests before any implementation
-2. Each step = ONE atomic action
-3. Order steps highest-risk first: infra/auth/data → cross-cutting deps → feature leaves
+1. Test-first mandatory - Phase 1 writes tests before implementation
+2. Each step = one atomic action
+3. Order highest-risk first: infra/auth/data → deps → leaves
 4. Be explicit - vague steps fail
-5. Reference skills when applicable (e.g., "Use test-first skill")
-6. Acceptance Criteria MUST be executable (test file path or command)
+5. Done criteria must be observable (command or file check)
+6. Mark `Review: HITL` for steps requiring human judgment (see below)
 
-## Writing Acceptance Criteria
+## Acceptance Criteria Guide
 
-Acceptance criteria must be **observable outcomes**, not implementation details.
+Observable outcomes, not implementation details.
 
-**Format:** `Acceptance: [what to check] → [command or verification method]`
+| Type | Done Criteria | Verify |
+|------|---------------|--------|
+| New file | File exists with exports | `[ -f src/foo.ts ]` |
+| New function | Function callable | `grep -q "export function"` |
+| UI component | Renders without error | `npm run build` |
+| API endpoint | Returns expected | `curl localhost:3000/api/x` |
+| Bug fix | Repro fails | Test passes |
+| Refactor | Behavior unchanged | Existing tests pass |
+| Style/UX | Matches intent | HITL (human review) |
 
-**By task type:**
+## Review Types
 
-| Type | Good Criteria | Verification |
-|------|---------------|--------------|
-| New file | File exists with required exports | `[ -f src/foo.ts ] && grep -q "export" src/foo.ts` |
-| New function | Function exists and is callable | `grep -q "export function foo" src/bar.ts` |
-| UI component | Component renders without error | `npm run build` passes |
-| API endpoint | Endpoint responds correctly | `curl -s localhost:3000/api/x` returns expected |
-| Bug fix | Bug no longer occurs | Specific test passes or repro steps fail |
-| Refactor | Behavior unchanged | All existing tests pass |
-| Performance | Meets target metric | `time` or benchmark shows <Xms |
-| Style/UX | Matches design intent | LLM-as-judge: "Does this match [criteria]?" → yes/no |
+**AUTO** (default): Agent completes without pause. Use for:
+- Deterministic tasks (create file, run command, fix type error)
+- Tasks with objective pass/fail criteria
+- Test execution
 
-**Bad criteria (too vague):**
-- "Works correctly"
-- "Looks good"
-- "Is implemented"
+**HITL** (Human-in-the-Loop): Agent pauses for human approval. Use for:
+- Visual/design review ("Does this look right?")
+- Copy/tone decisions ("Is this wording correct?")
+- Ambiguous requirements needing clarification
+- Security-sensitive changes (auth, permissions, credentials)
+- Destructive operations (delete, migration, prod deploy)
 
-**Good criteria (testable):**
-- "File `src/auth.ts` exports `login` function"
-- "`npm test -- auth` passes"
-- "API returns 200 with `{status: 'ok'}`"
-- "Button is visible and clickable in Playwright"
-
-**For subjective criteria** (aesthetics, UX, tone):
-Use LLM-as-judge with binary pass/fail:
-`Acceptance: LLM confirms "hero section has clear visual hierarchy" → yes`
+When a step is marked HITL, the agent will:
+1. Complete the work
+2. Create/update bead with `hitl` label
+3. Pause and surface for human review
+4. Resume only after `/hitl-approve`
 
 ## CLAUDE.md Generation
 
-If this is a new app, create `./CLAUDE.md` using template at `templates/CLAUDE.md.template`:
-- Fill Stack with framework/styling decisions from plan
-- Fill Structure with directories being created
-- Fill Commands with project-specific scripts
-- Fill Notes with any app-specific quirks or constraints
-- Max 30 lines. Only include what differs from Factory Floor defaults.
+For new apps, create `./CLAUDE.md` from `templates/CLAUDE.md.template`:
+- Stack: framework/styling decisions
+- Structure: directories created
+- Commands: project scripts
+- Max 30 lines. Only diffs from Factory Floor defaults.
 
 Now read the TASK and create the plan.
