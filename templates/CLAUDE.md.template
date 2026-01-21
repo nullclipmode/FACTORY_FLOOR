@@ -1,0 +1,16 @@
+# [App Name]
+
+## Stack
+- Framework:
+- Styling:
+
+## Structure
+- `src/` -
+
+## Commands
+```bash
+npm run dev
+npm run test
+```
+
+## Notes
