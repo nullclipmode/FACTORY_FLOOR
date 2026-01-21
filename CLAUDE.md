@@ -1,0 +1,45 @@
+# Factory Floor
+
+## WHAT
+Personal app factory. Build web/mobile apps from plain language + reference images.
+
+**Structure:**
+- `infra/` - Terraform (GCP Cloud Run, Load Balancer, Cloud Armor)
+- `.beads/` - Git-backed issue tracker (issues.jsonl)
+- `.claude/commands/` - Custom slash commands
+
+**Stack:**
+- Frontend: Vercel
+- Backend: GCP Cloud Run
+- Database: Supabase (Postgres + Auth)
+- Files: GCS
+
+## WHY
+Autonomous operation:
+- Complete full tasks without unnecessary questions
+- When blocked: create bead with details, mark HITL, await human input
+- HITL only when human judgment genuinely required
+- Each app has its own CLAUDE.md with app-specific context
+
+## HOW
+
+### Beads (Issue Tracking)
+```bash
+bead new "title"     # Create issue
+bead list            # Show open
+bead close <id>      # Complete
+```
+Issues live in `.beads/issues.jsonl`. Check before creating duplicates.
+
+### Test-First Principle
+Write tests before implementation. Test files locked—cannot be modified to pass. Completion validated against original tests.
+
+### HITL Tasks
+Some beads require human judgment (design approval, ambiguous specs). Check `status: hitl` before auto-proceeding.
+
+### Verification
+```bash
+npm run build        # Must pass
+npm run test         # Must pass
+```
+Run both before marking work complete.
