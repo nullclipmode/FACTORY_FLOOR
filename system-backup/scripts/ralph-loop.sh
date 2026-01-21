@@ -136,6 +136,9 @@ while true; do
         [ -n "$BEAD_DESC" ] && echo "Description: $BEAD_DESC"
         echo ""
         echo -e "${YELLOW}Run: /hitl-approve $BEAD_ID${NC}"
+        echo ""
+        echo -e "${BLUE}Current bead state:${NC}"
+        bd prime 2>/dev/null
         exit 2
     fi
 
@@ -192,6 +195,9 @@ Complete this task. Output <promise>DONE</promise> when finished."
                 bd comments add "$BEAD_ID" "$(echo "$verify_result" | grep -A20 'Needs human review:')" 2>/dev/null
                 echo -e "${YELLOW}Bead $BEAD_ID marked for HITL review${NC}"
                 echo -e "${YELLOW}Run: /hitl-approve $BEAD_ID${NC}"
+                echo ""
+                echo -e "${BLUE}Current bead state:${NC}"
+                bd prime 2>/dev/null
                 exit 2
             fi
 
