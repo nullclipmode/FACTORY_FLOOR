@@ -19,6 +19,7 @@ Run the verification wrapper:
 ~/.claude/ralph-verify.sh
 ```
 This runs build and tests with quiet output (checkmarks on success, details on failure).
+- If output contains `VERIFY_RESULT=FAIL:LINT`, output `<verify>FAIL:LINT</verify>`
 - If output contains `VERIFY_RESULT=FAIL:BUILD`, output `<verify>FAIL:BUILD</verify>`
 - If output contains `VERIFY_RESULT=FAIL:TESTS`, output `<verify>FAIL:TESTS</verify>`
 - If output contains `VERIFY_RESULT=PASS`, continue to visual verification
