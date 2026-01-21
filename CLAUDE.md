@@ -43,3 +43,10 @@ npm run build        # Must pass
 npm run test         # Must pass
 ```
 Run both before marking work complete.
+
+### Sandbox (AFK Mode)
+When running unattended via `~/.claude/ralph-sandbox.sh`:
+- Only app directory mounted at /workspace
+- No host filesystem access outside workspace
+- Git via HTTPS/.netrc (no SSH)
+- If task needs unavailable credentials, mark bead `hitl`
