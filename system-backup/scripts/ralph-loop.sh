@@ -123,7 +123,16 @@ while true; do
                 echo -e "${YELLOW}=== HITL: Human review required ===${NC}"
                 echo "$verify_result" | grep -A20 "Needs human review:"
                 echo ""
-                echo -e "${YELLOW}Run /hitl-approve after review to continue.${NC}"
+
+                # Create HITL bead for tracking
+                HITL_BEAD_ID=$(bd create "HITL: Review $current_step" --label hitl --json 2>/dev/null | jq -r '.id' || echo "")
+                if [ -n "$HITL_BEAD_ID" ]; then
+                    bd comments add "$HITL_BEAD_ID" "$(echo "$verify_result" | grep -A20 'Needs human review:')" 2>/dev/null
+                    echo -e "${YELLOW}Created bead: $HITL_BEAD_ID${NC}"
+                    echo -e "${YELLOW}Run: /hitl-approve $HITL_BEAD_ID${NC}"
+                else
+                    echo -e "${YELLOW}Review manually, then re-run ralph-loop.sh${NC}"
+                fi
                 exit 2
             fi
 
