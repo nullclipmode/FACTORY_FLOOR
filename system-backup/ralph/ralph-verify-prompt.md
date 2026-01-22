@@ -37,8 +37,11 @@ Run all checks first. Then output based on results:
 **Any failure:**
 ```
 <verify>FAIL:CATEGORY</verify>
-Reason: [specific error]
-Fix needed: [what to change]
+Acceptance: #N ("[criterion text]")
+Error: [what actually happened]
+Details: [specific location/message]
+Fix direction: [what to change]
+Confidence: HIGH | MEDIUM | LOW
 ```
 
 **All pass, but HITL steps exist in plan:**
@@ -49,7 +52,17 @@ Needs human review:
 - [Step M]: [what to review]
 ```
 
-Categories: BUILD, STARTUP, VISUAL, FUNCTIONAL, TESTS
+## Categories
+- BUILD - Compilation/bundling failed
+- STARTUP - App won't start
+- VISUAL - UI doesn't render correctly
+- FUNCTIONAL - Behavior doesn't match acceptance
+- TESTS - Test suite failures
+
+## Confidence Levels
+- **HIGH** - Deterministic failure, fix direction clear (compiler error, missing file)
+- **MEDIUM** - Likely cause identified, fix may vary (flaky test, race condition)
+- **LOW** - Unclear root cause, may need HITL (intermittent, environment-specific)
 
 ## Rules
 

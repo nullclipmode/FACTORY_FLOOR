@@ -1,20 +1,23 @@
 #!/bin/bash
 
-# Ralph Loop - Fresh context orchestrator
+# Ralph Loop - Fresh context orchestrator with bead tracking
 # Two modes:
-#   ./ralph-loop.sh plan "task description"  - Create implementation plan
-#   ./ralph-loop.sh                          - Execute existing plan
+#   ./ralph-loop.sh plan "task description"  - Create plan + beads
+#   ./ralph-loop.sh                          - Execute beads
 
 PLAN_PROMPT="$HOME/.claude/ralph-plan-prompt.md"
 BUILD_PROMPT="$HOME/.claude/ralph-build-prompt.md"
 VERIFY_PROMPT="$HOME/.claude/ralph-verify-prompt.md"
 REVIEW_PROMPT="$HOME/.claude/ralph-review-prompt.md"
+PLAN_TO_BEADS="$HOME/.claude/plan-to-beads.sh"
 PLAN_FILE="./IMPLEMENTATION_PLAN.md"
+RALPH_LABEL="ralph"
 MAX_RETRIES=10
 VERIFY_RETRIES=5
 REVIEW_RETRIES=3
 REPLAN_AFTER=5
-MAX_ITERATIONS=${RALPH_MAX_ITERATIONS:-50}  # Total loop iterations before forced stop
+MAX_ITERATIONS=${RALPH_MAX_ITERATIONS:-50}
+MAX_BEAD_ATTEMPTS=3
 
 # Colors
 RED='\033[0;31m'
@@ -28,7 +31,7 @@ MODE="${1:-build}"
 TASK="${2:-}"
 
 if [ "$MODE" = "plan" ]; then
-    # PLAN MODE - Create implementation plan
+    # PLAN MODE - Create implementation plan + convert to beads
     if [ -z "$TASK" ]; then
         echo -e "${RED}Error: Plan mode requires a task description${NC}"
         echo "Usage: ./ralph-loop.sh plan \"Add user authentication\""
@@ -49,6 +52,16 @@ if [ "$MODE" = "plan" ]; then
     if [ -f "$PLAN_FILE" ]; then
         echo -e "${GREEN}Plan created: $PLAN_FILE${NC}"
         echo ""
+
+        # Convert plan to beads
+        if [ -f "$PLAN_TO_BEADS" ]; then
+            echo -e "${BLUE}Converting plan to beads...${NC}"
+            bash "$PLAN_TO_BEADS" "$PLAN_FILE" "$RALPH_LABEL"
+        else
+            echo -e "${YELLOW}Warning: plan-to-beads.sh not found, skipping bead creation${NC}"
+        fi
+
+        echo ""
         echo "Next: Run ./ralph-loop.sh to execute"
     else
         echo -e "${RED}Failed to create plan${NC}"
@@ -57,18 +70,33 @@ if [ "$MODE" = "plan" ]; then
     exit 0
 fi
 
-# BUILD MODE - Execute existing plan
-if [ ! -f "$PLAN_FILE" ]; then
-    echo -e "${RED}Error: No IMPLEMENTATION_PLAN.md found${NC}"
-    echo "Run: ./ralph-loop.sh plan \"your task\""
-    exit 1
-fi
-
+# BUILD MODE - Execute beads
 echo -e "${BLUE}=== BUILD MODE ===${NC}"
 echo "Max iterations: $MAX_ITERATIONS (set RALPH_MAX_ITERATIONS to change)"
 
+# Check for ralph beads
+RALPH_BEADS=$(bd list --label "$RALPH_LABEL" --status open --json 2>/dev/null | jq -r 'length')
+if [ "$RALPH_BEADS" = "0" ] || [ -z "$RALPH_BEADS" ]; then
+    # Fallback: check for IMPLEMENTATION_PLAN.md without beads
+    if [ -f "$PLAN_FILE" ]; then
+        echo -e "${YELLOW}No ralph beads found. Converting plan to beads...${NC}"
+        if [ -f "$PLAN_TO_BEADS" ]; then
+            bash "$PLAN_TO_BEADS" "$PLAN_FILE" "$RALPH_LABEL"
+        else
+            echo -e "${RED}Error: No beads and no plan-to-beads.sh${NC}"
+            echo "Run: ./ralph-loop.sh plan \"your task\""
+            exit 1
+        fi
+    else
+        echo -e "${RED}Error: No ralph beads found${NC}"
+        echo "Run: ./ralph-loop.sh plan \"your task\""
+        exit 1
+    fi
+fi
+
 retry_count=0
-current_step=""
+current_bead_id=""
+bead_total_attempts=0
 iteration=0
 
 while true; do
@@ -76,28 +104,90 @@ while true; do
 
     if [ $iteration -gt $MAX_ITERATIONS ]; then
         echo -e "${RED}Max iterations ($MAX_ITERATIONS) reached. Stopping.${NC}"
-        echo "Progress saved in $PLAN_FILE. Re-run to continue."
+        echo "Run 'bd list --label $RALPH_LABEL' to see progress."
         exit 1
     fi
-    pending=$(grep -c "Status: PENDING" "$PLAN_FILE" 2>/dev/null | tr -d '\n' || echo "0")
 
-    if [ "$pending" = "0" ] || [ -z "$pending" ]; then
-        echo -e "${GREEN}All steps complete!${NC}"
-        exit 0
+    # Get next runnable bead (open, not blocked by other open beads)
+    NEXT_BEAD=$(bd ready --label "$RALPH_LABEL" --json 2>/dev/null | jq -r '.[0] // empty')
+
+    if [ -z "$NEXT_BEAD" ]; then
+        # Check if there are any open beads at all
+        OPEN_COUNT=$(bd list --label "$RALPH_LABEL" --status open --json 2>/dev/null | jq -r 'length')
+        if [ "$OPEN_COUNT" = "0" ] || [ -z "$OPEN_COUNT" ]; then
+            echo -e "${GREEN}All ralph beads complete!${NC}"
+            exit 0
+        else
+            # Beads exist but none ready - likely blocked
+            echo -e "${YELLOW}No runnable beads. $OPEN_COUNT beads blocked or waiting.${NC}"
+            echo "Run 'bd list --label $RALPH_LABEL --status open' to see blocked beads."
+            exit 2
+        fi
     fi
 
-    new_step=$(grep -B2 "Status: PENDING" "$PLAN_FILE" | head -1)
+    BEAD_ID=$(echo "$NEXT_BEAD" | jq -r '.id')
+    BEAD_TITLE=$(echo "$NEXT_BEAD" | jq -r '.title')
+    BEAD_DESC=$(echo "$NEXT_BEAD" | jq -r '.description // empty')
+    BEAD_ACCEPTANCE=$(echo "$NEXT_BEAD" | jq -r '.acceptance // empty')
+    IS_HITL=$(echo "$NEXT_BEAD" | jq -r '.labels | if . then (. | index("hitl") != null) else false end')
 
-    if [ "$new_step" != "$current_step" ]; then
-        current_step="$new_step"
+    # Check if this is a HITL bead
+    if [ "$IS_HITL" = "true" ]; then
+        echo -e "${YELLOW}=== HITL: Human review required ===${NC}"
+        echo "Bead: $BEAD_ID - $BEAD_TITLE"
+        [ -n "$BEAD_DESC" ] && echo "Description: $BEAD_DESC"
+        echo ""
+        echo -e "${YELLOW}Run: /hitl-approve $BEAD_ID${NC}"
+        echo ""
+        echo -e "${BLUE}Current bead state:${NC}"
+        bd prime 2>/dev/null
+        exit 2
+    fi
+
+    if [ "$BEAD_ID" != "$current_bead_id" ]; then
+        current_bead_id="$BEAD_ID"
         retry_count=0
+        bead_total_attempts=0
+        # Mark as in_progress
+        bd update "$BEAD_ID" --status in_progress 2>/dev/null
     fi
+
+    # Check total attempts BEFORE incrementing (Option B - prevents off-by-one)
+    if [ "$bead_total_attempts" -ge "$MAX_BEAD_ATTEMPTS" ]; then
+        echo -e "${RED}Bead failed after $MAX_BEAD_ATTEMPTS full cycles${NC}"
+        bd update "$BEAD_ID" --status blocked 2>/dev/null
+        bd label add "$BEAD_ID" hitl 2>/dev/null
+        TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        LAST_OUTPUT=$(echo "$output" | tail -c 500)
+        bd comments add "$BEAD_ID" "[$BEAD_ID] [$TIMESTAMP] [BUILD] Failed after $MAX_BEAD_ATTEMPTS full cycles.
+Last output:
+$LAST_OUTPUT" 2>/dev/null
+        echo -e "${YELLOW}Bead $BEAD_ID marked blocked + hitl${NC}"
+        echo ""
+        echo -e "${BLUE}Current bead state:${NC}"
+        bd prime 2>/dev/null
+        exit 2
+    fi
+    bead_total_attempts=$((bead_total_attempts + 1))
 
     echo -e "${YELLOW}Running Ralph (attempt $((retry_count + 1))/$MAX_RETRIES)...${NC}"
-    echo "Step: $current_step"
+    echo "Bead: $BEAD_ID - $BEAD_TITLE"
+    [ -n "$BEAD_ACCEPTANCE" ] && echo "Acceptance: $BEAD_ACCEPTANCE"
     echo "---"
 
-    output=$(cat "$BUILD_PROMPT" | claude -p --allowedTools "Read Edit Write Bash Glob Grep" --dangerously-skip-permissions 2>&1)
+    # Inject context files so Claude starts with full context
+    [ -f ./AGENTS.md ] || cp ~/.claude/AGENTS.md ./AGENTS.md 2>/dev/null || touch ./AGENTS.md
+
+    # Build context for Claude
+    BEAD_CONTEXT="Current task bead:
+ID: $BEAD_ID
+Title: $BEAD_TITLE
+Description: $BEAD_DESC
+Acceptance criteria: $BEAD_ACCEPTANCE
+
+Complete this task. Output <promise>DONE</promise> when finished."
+
+    output=$(cat ./AGENTS.md "$BUILD_PROMPT" <(echo "$BEAD_CONTEXT") 2>/dev/null | claude -p --allowedTools "Read Edit Write Bash Glob Grep" --dangerously-skip-permissions 2>&1)
     echo "$output"
 
     if echo "$output" | grep -q "<promise>DONE</promise>"; then
@@ -116,12 +206,36 @@ while true; do
                 break
             fi
 
+            if echo "$verify_result" | grep -q "<verify>HITL</verify>"; then
+                echo -e "${YELLOW}=== HITL: Human review required ===${NC}"
+                echo "$verify_result" | grep -A20 "Needs human review:"
+                echo ""
+
+                # Update bead to HITL status
+                bd label add "$BEAD_ID" hitl 2>/dev/null
+                TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                HITL_DETAILS=$(echo "$verify_result" | grep -A20 'Needs human review:')
+                bd comments add "$BEAD_ID" "[$BEAD_ID] [$TIMESTAMP] [VERIFY] HITL required.
+$HITL_DETAILS" 2>/dev/null
+                echo -e "${YELLOW}Bead $BEAD_ID marked for HITL review${NC}"
+                echo -e "${YELLOW}Run: /hitl-approve $BEAD_ID${NC}"
+                echo ""
+                echo -e "${BLUE}Current bead state:${NC}"
+                bd prime 2>/dev/null
+                exit 2
+            fi
+
             if echo "$verify_result" | grep -q "<verify>FAIL"; then
                 verify_attempt=$((verify_attempt + 1))
 
                 if [ $verify_attempt -ge $VERIFY_RETRIES ]; then
                     echo -e "${RED}Verification failed - needs fix${NC}"
-                    # Don't mark step complete, loop back to fix
+                    # Capture failure details before looping back
+                    TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                    FAIL_DETAILS=$(echo "$verify_result" | grep -A10 '<verify>FAIL')
+                    bd comments add "$BEAD_ID" "[$BEAD_ID] [$TIMESTAMP] [VERIFY] Failed after $VERIFY_RETRIES attempts.
+$FAIL_DETAILS" 2>/dev/null
+                    # Don't close bead, loop back to fix
                     continue 2
                 fi
 
@@ -174,6 +288,36 @@ while true; do
             done
         fi
 
+        # ========== ENFORCED COMMIT GATE (Claude cannot bypass) ==========
+        has(){ grep -q "\"$1\"" package.json 2>/dev/null; }
+
+        PASS=true
+        if [ -f package.json ]; then
+          PM=npm; [ -f pnpm-lock.yaml ] && PM=pnpm; [ -f yarn.lock ] && PM=yarn
+          has typecheck && { $PM run typecheck || PASS=false; }
+          has lint      && { $PM run lint      || PASS=false; }
+          has test      && { $PM run test      || PASS=false; }
+          has build     && { $PM run build     || PASS=false; }
+        fi
+
+        if [ "$PASS" = false ]; then
+          echo -e "${RED}Commit gate failed - looping to fix${NC}"
+          continue
+        fi
+
+        git add -A
+        if git diff --cached --quiet; then
+          echo -e "${YELLOW}Nothing staged - skipping commit.${NC}"
+        else
+          git commit -m "ralph: $BEAD_TITLE [$BEAD_ID]"
+          echo -e "${GREEN}Committed.${NC}"
+        fi
+        # ========== END COMMIT GATE ==========
+
+        # Close the bead
+        bd close "$BEAD_ID" --reason "Completed by ralph-loop" 2>/dev/null
+        echo -e "${GREEN}Bead $BEAD_ID closed${NC}"
+
         retry_count=0
         continue
     fi
@@ -181,40 +325,15 @@ while true; do
     if echo "$output" | grep -q "<promise>FAILED</promise>"; then
         retry_count=$((retry_count + 1))
 
-        # Auto-replan after REPLAN_AFTER attempts
-        if [ $retry_count -eq $REPLAN_AFTER ]; then
-            echo -e "${YELLOW}Attempt $REPLAN_AFTER failed. Auto-replanning this step...${NC}"
-            replan_prompt="The step '$current_step' has failed $REPLAN_AFTER times. Analyze the errors and rewrite ONLY this step in IMPLEMENTATION_PLAN.md with a different approach. Keep Status: PENDING."
-            replan_result=$(echo "$replan_prompt" | claude -p --dangerously-skip-permissions 2>&1)
-            echo "$replan_result"
-            echo -e "${BLUE}Step replanned. Continuing...${NC}"
-            continue
-        fi
-
         if [ $retry_count -ge $MAX_RETRIES ]; then
-            echo -e "${RED}Step failed $MAX_RETRIES times (including replan).${NC}"
-            echo -e "${YELLOW}Replanning from this step forward...${NC}"
+            echo -e "${RED}Bead failed $MAX_RETRIES times.${NC}"
+            bd update "$BEAD_ID" --status blocked 2>/dev/null
+            bd comments add "$BEAD_ID" "Failed after $MAX_RETRIES attempts" 2>/dev/null
+            echo -e "${YELLOW}Bead $BEAD_ID marked as blocked${NC}"
 
-            # Replan only remaining steps - preserve completed work
-            replan_full_prompt="A step in IMPLEMENTATION_PLAN.md has failed after $MAX_RETRIES attempts:
-
-BLOCKED STEP: $current_step
-
-Your task:
-1. Keep ALL steps marked 'Status: COMPLETE' exactly as they are
-2. DELETE the blocked step and ALL remaining PENDING steps
-3. Create NEW steps that achieve the same goal using a DIFFERENT approach
-4. The new steps must work with what's already been completed
-5. Mark new steps as 'Status: PENDING'
-
-Do NOT touch completed steps. Only rewrite from the blocker onward."
-
-            replan_full_result=$(echo "$replan_full_prompt" | claude -p --dangerously-skip-permissions 2>&1)
-            echo "$replan_full_result"
-            echo -e "${BLUE}Plan rewritten from blocker. Continuing...${NC}"
-
+            # Reset for next bead
             retry_count=0
-            current_step=""
+            current_bead_id=""
             continue
         fi
 
@@ -226,29 +345,14 @@ Do NOT touch completed steps. Only rewrite from the blocker onward."
     retry_count=$((retry_count + 1))
 
     if [ $retry_count -ge $MAX_RETRIES ]; then
-        echo -e "${RED}Step incomplete after $MAX_RETRIES attempts.${NC}"
-        echo -e "${YELLOW}Replanning from this step forward...${NC}"
+        echo -e "${RED}Bead incomplete after $MAX_RETRIES attempts.${NC}"
+        bd update "$BEAD_ID" --status blocked 2>/dev/null
+        bd comments add "$BEAD_ID" "Incomplete after $MAX_RETRIES attempts" 2>/dev/null
+        echo -e "${YELLOW}Bead $BEAD_ID marked as blocked${NC}"
 
-        # Same replan logic for unclear failures
-        replan_full_prompt="A step in IMPLEMENTATION_PLAN.md has failed after $MAX_RETRIES attempts:
-
-BLOCKED STEP: $current_step
-
-Your task:
-1. Keep ALL steps marked 'Status: COMPLETE' exactly as they are
-2. DELETE the blocked step and ALL remaining PENDING steps
-3. Create NEW steps that achieve the same goal using a DIFFERENT approach
-4. The new steps must work with what's already been completed
-5. Mark new steps as 'Status: PENDING'
-
-Do NOT touch completed steps. Only rewrite from the blocker onward."
-
-        replan_full_result=$(echo "$replan_full_prompt" | claude -p --dangerously-skip-permissions 2>&1)
-        echo "$replan_full_result"
-        echo -e "${BLUE}Plan rewritten from blocker. Continuing...${NC}"
-
+        # Reset for next bead
         retry_count=0
-        current_step=""
+        current_bead_id=""
         continue
     fi
 
