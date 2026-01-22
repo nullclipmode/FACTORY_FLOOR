@@ -230,9 +230,9 @@ $HITL_DETAILS" 2>/dev/null
 
                 if [ $verify_attempt -ge $VERIFY_RETRIES ]; then
                     echo -e "${RED}Verification failed - needs fix${NC}"
-                    # Capture failure details before looping back
+                    # Capture full structured failure (Acceptance through Confidence)
                     TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-                    FAIL_DETAILS=$(echo "$verify_result" | grep -A10 '<verify>FAIL')
+                    FAIL_DETAILS=$(echo "$verify_result" | sed -n '/<verify>FAIL/,/Confidence:/p')
                     bd comments add "$BEAD_ID" "[$BEAD_ID] [$TIMESTAMP] [VERIFY] Failed after $VERIFY_RETRIES attempts.
 $FAIL_DETAILS" 2>/dev/null
                     # Don't close bead, loop back to fix
@@ -328,7 +328,11 @@ $FAIL_DETAILS" 2>/dev/null
         if [ $retry_count -ge $MAX_RETRIES ]; then
             echo -e "${RED}Bead failed $MAX_RETRIES times.${NC}"
             bd update "$BEAD_ID" --status blocked 2>/dev/null
-            bd comments add "$BEAD_ID" "Failed after $MAX_RETRIES attempts" 2>/dev/null
+            TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+            LAST_OUTPUT=$(echo "$output" | tail -c 500)
+            bd comments add "$BEAD_ID" "[$BEAD_ID] [$TIMESTAMP] [BUILD] Explicit FAILED after $MAX_RETRIES attempts.
+Last output:
+$LAST_OUTPUT" 2>/dev/null
             echo -e "${YELLOW}Bead $BEAD_ID marked as blocked${NC}"
 
             # Reset for next bead
@@ -347,7 +351,11 @@ $FAIL_DETAILS" 2>/dev/null
     if [ $retry_count -ge $MAX_RETRIES ]; then
         echo -e "${RED}Bead incomplete after $MAX_RETRIES attempts.${NC}"
         bd update "$BEAD_ID" --status blocked 2>/dev/null
-        bd comments add "$BEAD_ID" "Incomplete after $MAX_RETRIES attempts" 2>/dev/null
+        TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        LAST_OUTPUT=$(echo "$output" | tail -c 500)
+        bd comments add "$BEAD_ID" "[$BEAD_ID] [$TIMESTAMP] [BUILD] Incomplete (no DONE/FAILED) after $MAX_RETRIES attempts.
+Last output:
+$LAST_OUTPUT" 2>/dev/null
         echo -e "${YELLOW}Bead $BEAD_ID marked as blocked${NC}"
 
         # Reset for next bead

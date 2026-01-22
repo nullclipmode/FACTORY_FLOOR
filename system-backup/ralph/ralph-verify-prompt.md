@@ -57,7 +57,7 @@ Needs human review:
 - STARTUP - App won't start
 - VISUAL - UI doesn't render correctly
 - FUNCTIONAL - Behavior doesn't match acceptance
-- TESTS - Test suite failures
+- TEST - Test suite failures
 
 ## Confidence Levels
 - **HIGH** - Deterministic failure, fix direction clear (compiler error, missing file)
