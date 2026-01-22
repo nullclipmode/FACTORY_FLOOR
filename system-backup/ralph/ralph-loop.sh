@@ -233,6 +233,8 @@ $HITL_DETAILS" 2>/dev/null
                     # Capture full structured failure (Acceptance through Confidence)
                     TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
                     FAIL_DETAILS=$(echo "$verify_result" | sed -n '/<verify>FAIL/,/Confidence:/p')
+                    # Fallback: if structured capture empty, use last 4KB
+                    [ -z "$FAIL_DETAILS" ] && FAIL_DETAILS=$(echo "$verify_result" | tail -c 4096)
                     bd comments add "$BEAD_ID" "[$BEAD_ID] [$TIMESTAMP] [VERIFY] Failed after $VERIFY_RETRIES attempts.
 $FAIL_DETAILS" 2>/dev/null
                     # Don't close bead, loop back to fix
