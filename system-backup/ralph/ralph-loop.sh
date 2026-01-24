@@ -100,6 +100,39 @@ current_bead_id=""
 bead_total_attempts=0
 iteration=0
 
+# Capture closed beads state for immutability check
+# Closed beads must not be deleted or modified during the loop
+CLOSED_BEADS_JSON=$(bd list --status closed --json 2>/dev/null || echo "[]")
+
+# Function to verify closed bead immutability (handles spaces in IDs)
+check_closed_bead_immutability() {
+    local current_json
+    current_json=$(bd list --status closed --json 2>/dev/null || echo "[]")
+    local violations=0
+
+    # Iterate through original closed beads using process substitution
+    # This preserves variable scope and handles spaces in IDs
+    while IFS= read -r CID; do
+        [ -z "$CID" ] && continue
+
+        # Use jq --arg to safely handle special characters in ID
+        OLD_BEAD=$(echo "$CLOSED_BEADS_JSON" | jq -c --arg id "$CID" '.[] | select(.id == $id)' 2>/dev/null)
+        NEW_BEAD=$(echo "$current_json" | jq -c --arg id "$CID" '.[] | select(.id == $id)' 2>/dev/null)
+
+        if [ -z "$NEW_BEAD" ]; then
+            echo -e "${RED}BLOCKED: Closed bead $CID was deleted${NC}"
+            violations=$((violations + 1))
+        elif [ "$OLD_BEAD" != "$NEW_BEAD" ]; then
+            echo -e "${RED}BLOCKED: Closed bead $CID was modified${NC}"
+            echo "  Old: $OLD_BEAD"
+            echo "  New: $NEW_BEAD"
+            violations=$((violations + 1))
+        fi
+    done < <(echo "$CLOSED_BEADS_JSON" | jq -r '.[].id' 2>/dev/null)
+
+    return $violations
+}
+
 while true; do
     iteration=$((iteration + 1))
 
@@ -342,6 +375,14 @@ Fix these issues. Output <promise>FIXED</promise> when done."
           echo -e "${GREEN}Committed.${NC}"
         fi
         # ========== END COMMIT GATE ==========
+
+        # ========== CLOSED BEAD IMMUTABILITY CHECK ==========
+        if ! check_closed_bead_immutability; then
+            echo -e "${RED}Closed bead immutability violated - aborting${NC}"
+            echo "Closed beads must not be deleted or modified during execution."
+            exit 1
+        fi
+        # ========== END IMMUTABILITY CHECK ==========
 
         # Close the bead
         bd close "$BEAD_ID" --reason "Completed by ralph-loop" 2>/dev/null
