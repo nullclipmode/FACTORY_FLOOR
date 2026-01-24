@@ -1,7 +1,7 @@
 # Ralph / Factory Floor System Specification
 
-Version: 2.0
-Updated: 2026-01-22
+Version: 3.0
+Updated: 2026-01-24
 
 ## 1. System Intent
 
@@ -18,13 +18,28 @@ Autonomous software development with human oversight at decision points.
 │  │  PLAN   │ → │  BUILD  │ → │ VERIFY  │ → │ REVIEW  │ → ✓ │
 │  └─────────┘   └─────────┘   └─────────┘   └─────────┘     │
 │       ↓             ↓             ↓             ↓           │
-│  plan-prompt   build-prompt  verify-prompt  review-prompt   │
+│  ralph-      ralph-        ralph-        ralph-             │
+│  planner     builder       verifier      reviewer           │
+│  (subagent)  (subagent)    (subagent)    (subagent)         │
 └─────────────────────────────────────────────────────────────┘
         ↓
    ┌─────────┐
    │ BEADS   │  .beads/issues.jsonl
    └─────────┘
 ```
+
+### 2.1 Native Subagents
+
+Ralph now uses Claude Code native subagents for isolated context windows:
+
+| Subagent | Model | Purpose |
+|----------|-------|---------|
+| ralph-planner | opus | Creates implementation plans with test-first phases |
+| ralph-builder | sonnet | Implements bead acceptance criteria |
+| ralph-verifier | sonnet | Verifies implementations pass build/test/visual checks |
+| ralph-reviewer | sonnet | Reviews git diff for bugs, security, missed requirements |
+
+Subagents are defined in `~/.claude/agents/` with YAML frontmatter.
 
 ## 3. Execution Flow
 
@@ -242,19 +257,47 @@ Fix: [brief suggestion]
 
 ### Live (executed)
 ```
-~/.claude/ralph-loop.sh
+~/.claude/ralph-loop.sh           # Main orchestrator
+~/.claude/plan-to-beads.sh        # Plan to bead converter
+~/.claude/AGENTS.md               # Agent configuration reference
+
+# Subagents (native Claude Code subagents)
+~/.claude/agents/ralph-planner.md
+~/.claude/agents/ralph-builder.md
+~/.claude/agents/ralph-verifier.md
+~/.claude/agents/ralph-reviewer.md
+
+# Modular rules (always active)
+~/.claude/rules/factory-quality-bar.md
+~/.claude/rules/test-first.md
+~/.claude/rules/no-self-assessment.md
+~/.claude/rules/commit-invariants.md
+~/.claude/rules/hitl-triggers.md
+
+# Skills (workflow definitions)
+~/.claude/skills/tdd-workflow/SKILL.md
+~/.claude/skills/codemap-updater/SKILL.md
+~/.claude/skills/refactor-clean/SKILL.md
+
+# Hooks
+~/.claude/settings.json           # Hook configuration
+~/.claude/stop-hook-git-check.sh  # Git status check on stop
+
+# Legacy prompts (kept for reference)
 ~/.claude/ralph-plan-prompt.md
 ~/.claude/ralph-build-prompt.md
 ~/.claude/ralph-verify-prompt.md
 ~/.claude/ralph-review-prompt.md
-~/.claude/plan-to-beads.sh
-~/.claude/AGENTS.md
 ```
 
 ### Backup (version controlled)
 ```
-system-backup/ralph/
-system-backup/scripts/
+system-backup/ralph/              # Ralph loop script
+system-backup/agents/             # Subagent definitions
+system-backup/rules/              # Modular rules
+system-backup/skills/             # Skill definitions
+system-backup/scripts/            # Utility scripts
+system-backup/settings.json       # Hook configuration
 ```
 
 ### Per-Project
@@ -289,9 +332,46 @@ bd comments add <id> "msg"   # Add comment
 
 ## 13. Quality Bar
 
-From `AGENTS.md`:
+Defined in modular rules at `~/.claude/rules/`:
+
+### factory-quality-bar.md
 - Resolve all TODOs before commit
 - Code compiles
 - Lint/test/build pass (when present)
 - Behavior changes include test adds/updates
 - No silent error swallowing
+
+### test-first.md
+- Write failing tests before implementation
+- Test files are read-only after Phase 1
+- Cannot modify tests to make them pass
+
+### no-self-assessment.md
+- Agent cannot mark DONE without external verification
+- Commit gate is the completion oracle
+
+### commit-invariants.md
+- All checks must pass before commit
+- No broken code committed
+- Atomic commits per bead
+
+### hitl-triggers.md
+- Visual/design decisions need human review
+- Security-sensitive changes need review
+- Ambiguous requirements escalate to HITL
+
+## 14. Hooks Configuration
+
+Defined in `~/.claude/settings.json`:
+
+### PreToolUse Hooks
+- **git push**: Run full commit gate before push
+
+### PostToolUse Hooks
+- **Edit/Write .ts/.tsx/.js/.jsx/.json/.css/.md**: Auto-format with prettier
+- **Edit/Write .ts/.tsx**: Run tsc --noEmit for type feedback
+- **Edit/Write .ts/.tsx/.js/.jsx**: Warn if console.log detected
+
+### Stop Hooks
+- **Git check**: Ensure all changes committed and pushed
+- **Console.log audit**: Warn about debug logs in recent changes

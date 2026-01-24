@@ -1,14 +1,12 @@
 #!/bin/bash
 
 # Ralph Loop - Fresh context orchestrator with bead tracking
+# Uses native Claude Code subagents for isolated context windows
+#
 # Two modes:
 #   ./ralph-loop.sh plan "task description"  - Create plan + beads
 #   ./ralph-loop.sh                          - Execute beads
 
-PLAN_PROMPT="$HOME/.claude/ralph-plan-prompt.md"
-BUILD_PROMPT="$HOME/.claude/ralph-build-prompt.md"
-VERIFY_PROMPT="$HOME/.claude/ralph-verify-prompt.md"
-REVIEW_PROMPT="$HOME/.claude/ralph-review-prompt.md"
 PLAN_TO_BEADS="$HOME/.claude/plan-to-beads.sh"
 PLAN_FILE="./IMPLEMENTATION_PLAN.md"
 RALPH_LABEL="ralph"
@@ -42,11 +40,14 @@ if [ "$MODE" = "plan" ]; then
     echo "Task: $TASK"
     echo "---"
 
-    # Create task context file
-    echo "TASK: $TASK" > /tmp/ralph-task.md
+    # Invoke ralph-planner subagent
+    PLAN_PROMPT="Use the ralph-planner subagent to create an implementation plan for this task:
 
-    # Run planner with task
-    output=$(cat "$PLAN_PROMPT" /tmp/ralph-task.md | claude -p --allowedTools "Read Glob Grep" 2>&1)
+TASK: $TASK
+
+Create IMPLEMENTATION_PLAN.md with test-first phases as specified in the subagent instructions."
+
+    output=$(echo "$PLAN_PROMPT" | claude -p --allowedTools "Read Glob Grep Bash Task" 2>&1)
     echo "$output"
 
     if [ -f "$PLAN_FILE" ]; then
@@ -170,7 +171,7 @@ $LAST_OUTPUT" 2>/dev/null
     fi
     bead_total_attempts=$((bead_total_attempts + 1))
 
-    echo -e "${YELLOW}Running Ralph (attempt $((retry_count + 1))/$MAX_RETRIES)...${NC}"
+    echo -e "${YELLOW}Running Ralph Builder (attempt $((retry_count + 1))/$MAX_RETRIES)...${NC}"
     echo "Bead: $BEAD_ID - $BEAD_TITLE"
     [ -n "$BEAD_ACCEPTANCE" ] && echo "Acceptance: $BEAD_ACCEPTANCE"
     echo "---"
@@ -178,27 +179,38 @@ $LAST_OUTPUT" 2>/dev/null
     # Inject context files so Claude starts with full context
     [ -f ./AGENTS.md ] || cp ~/.claude/AGENTS.md ./AGENTS.md 2>/dev/null || touch ./AGENTS.md
 
-    # Build context for Claude
-    BEAD_CONTEXT="Current task bead:
+    # Invoke ralph-builder subagent
+    BUILD_PROMPT="Use the ralph-builder subagent to implement this bead.
+
+Current task bead:
 ID: $BEAD_ID
 Title: $BEAD_TITLE
 Description: $BEAD_DESC
 Acceptance criteria: $BEAD_ACCEPTANCE
 
-Complete this task. Output <promise>DONE</promise> when finished."
+Complete this task following test-first principles. Output <promise>DONE</promise> when finished or <promise>FAILED</promise> if blocked."
 
-    output=$(cat ./AGENTS.md "$BUILD_PROMPT" <(echo "$BEAD_CONTEXT") 2>/dev/null | claude -p --allowedTools "Read Edit Write Bash Glob Grep" --dangerously-skip-permissions 2>&1)
+    output=$(echo "$BUILD_PROMPT" | claude -p --allowedTools "Read Edit Write Bash Glob Grep Task" --dangerously-skip-permissions 2>&1)
     echo "$output"
 
     if echo "$output" | grep -q "<promise>DONE</promise>"; then
         echo -e "${GREEN}Step completed! Running verification...${NC}"
 
-        # Autonomous verification with Playwright
+        # Invoke ralph-verifier subagent
         verify_attempt=0
         while [ $verify_attempt -lt $VERIFY_RETRIES ]; do
             echo -e "${BLUE}Verification attempt $((verify_attempt + 1))/$VERIFY_RETRIES${NC}"
 
-            verify_result=$(cat "$VERIFY_PROMPT" | claude -p --dangerously-skip-permissions 2>&1)
+            VERIFY_PROMPT="Use the ralph-verifier subagent to verify the implementation.
+
+Bead being verified:
+ID: $BEAD_ID
+Title: $BEAD_TITLE
+Acceptance criteria: $BEAD_ACCEPTANCE
+
+Check build, tests, and functionality. Output <verify>PASS</verify>, <verify>FAIL:CATEGORY</verify>, or <verify>HITL</verify>."
+
+            verify_result=$(echo "$VERIFY_PROMPT" | claude -p --allowedTools "Read Bash Glob Grep Task" --dangerously-skip-permissions 2>&1)
             echo "$verify_result"
 
             if echo "$verify_result" | grep -q "<verify>PASS</verify>"; then
@@ -244,7 +256,10 @@ $FAIL_DETAILS" 2>/dev/null
                 echo -e "${YELLOW}Verification failed, Claude will fix and re-verify...${NC}"
 
                 # Run fixer with the failure context
-                fix_prompt="The verification failed with this result:\n$verify_result\n\nFix the issue and update the code. Output <promise>FIXED</promise> when done."
+                fix_prompt="The verification failed with this result:
+$verify_result
+
+Fix the issue and update the code. Output <promise>FIXED</promise> when done."
                 fix_result=$(echo -e "$fix_prompt" | claude -p --dangerously-skip-permissions 2>&1)
                 echo "$fix_result"
             else
@@ -254,41 +269,53 @@ $FAIL_DETAILS" 2>/dev/null
             fi
         done
 
-        # Cross-model code review (second opinion)
-        if [ -f "$REVIEW_PROMPT" ]; then
-            echo -e "${BLUE}Running cross-model review...${NC}"
-            review_attempt=0
-            while [ $review_attempt -lt $REVIEW_RETRIES ]; do
-                # Get the diff of recent changes
-                git_diff=$(git diff HEAD~1 2>/dev/null || git diff)
-                review_input="$git_diff"
+        # Invoke ralph-reviewer subagent for code review
+        echo -e "${BLUE}Running code review via ralph-reviewer subagent...${NC}"
+        review_attempt=0
+        while [ $review_attempt -lt $REVIEW_RETRIES ]; do
+            # Get the diff of recent changes
+            git_diff=$(git diff HEAD~1 2>/dev/null || git diff)
 
-                review_result=$(echo "$review_input" | cat "$REVIEW_PROMPT" - | claude -p 2>&1)
-                echo "$review_result"
+            REVIEW_PROMPT="Use the ralph-reviewer subagent to review these code changes.
 
-                if echo "$review_result" | grep -q "<review>APPROVED</review>"; then
-                    echo -e "${GREEN}Code review passed!${NC}"
+Bead context:
+ID: $BEAD_ID
+Title: $BEAD_TITLE
+Acceptance: $BEAD_ACCEPTANCE
+
+Git diff to review:
+$git_diff
+
+Output <review>APPROVED</review> or <review>NEEDS_WORK</review> with issues list."
+
+            review_result=$(echo "$REVIEW_PROMPT" | claude -p --allowedTools "Read Bash Glob Grep Task" 2>&1)
+            echo "$review_result"
+
+            if echo "$review_result" | grep -q "<review>APPROVED</review>"; then
+                echo -e "${GREEN}Code review passed!${NC}"
+                break
+            fi
+
+            if echo "$review_result" | grep -q "<review>NEEDS_WORK</review>"; then
+                review_attempt=$((review_attempt + 1))
+
+                if [ $review_attempt -ge $REVIEW_RETRIES ]; then
+                    echo -e "${RED}Review failed after $REVIEW_RETRIES attempts - moving on with warning${NC}"
                     break
                 fi
 
-                if echo "$review_result" | grep -q "<review>NEEDS_WORK</review>"; then
-                    review_attempt=$((review_attempt + 1))
+                echo -e "${YELLOW}Review found issues, fixing...${NC}"
+                fix_prompt="Code review found issues:
+$review_result
 
-                    if [ $review_attempt -ge $REVIEW_RETRIES ]; then
-                        echo -e "${RED}Review failed after $REVIEW_RETRIES attempts - moving on with warning${NC}"
-                        break
-                    fi
-
-                    echo -e "${YELLOW}Review found issues, fixing...${NC}"
-                    fix_prompt="Code review found issues:\n$review_result\n\nFix these issues. Output <promise>FIXED</promise> when done."
-                    fix_result=$(echo -e "$fix_prompt" | claude -p --dangerously-skip-permissions 2>&1)
-                    echo "$fix_result"
-                else
-                    echo -e "${YELLOW}Review unclear, continuing...${NC}"
-                    break
-                fi
-            done
-        fi
+Fix these issues. Output <promise>FIXED</promise> when done."
+                fix_result=$(echo -e "$fix_prompt" | claude -p --dangerously-skip-permissions 2>&1)
+                echo "$fix_result"
+            else
+                echo -e "${YELLOW}Review unclear, continuing...${NC}"
+                break
+            fi
+        done
 
         # ========== ENFORCED COMMIT GATE (Claude cannot bypass) ==========
         has(){ grep -q "\"$1\"" package.json 2>/dev/null; }
