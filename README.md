@@ -1,6 +1,4 @@
-# Factory Floor
 
-Personal app factory for building web/mobile apps from plain language and reference images. Designed for autonomous AI operation.
 
 ## Quick Start
 
